@@ -20,12 +20,11 @@ repos:
     repo: https://github.com/dnephin/pre-commit-golang
     rev: v0.5.1
   - hooks:
+      - id: golangci-lint-fmt
       - id: golangci-lint-full
         args:
-          - --disable-all
+          - --default=none
           - --verbose
-          - --enable
-          - gofmt
           - --enable
           - govet
           - --enable
@@ -35,4 +34,4 @@ repos:
           - --enable
           - unused
     repo: https://github.com/golangci/golangci-lint
-    rev: v1.64.5
+    rev: v2.10.0

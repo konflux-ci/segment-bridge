@@ -18,17 +18,39 @@
 #
 
 # First stage: Build the tkn-results binary
-FROM registry.access.redhat.com/ubi9/go-toolset:9.5-1739801907 AS builder
+FROM registry.access.redhat.com/ubi9/go-toolset:1.25.5-1770596585 AS builder
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
 WORKDIR /build
-# Build tkn-results binary for linux/amd64
-ENV GOOS=linux
-ENV GOARCH=amd64
-RUN go build -o /build/tkn-results github.com/tektoncd/results/cmd/tkn-results@latest
+
+# Copy Go module files and download dependencies (supports Cachi2 prefetching)
+COPY --chown=1001:0 go.mod go.sum ./
+RUN go mod download
+
+# Copy the tools.go build-tag file so `go build` can resolve the dependency
+COPY --chown=1001:0 tools.go ./
+
+# Build tkn-results binary for the target platform (set automatically by buildah
+# in multi-platform builds; defaults to linux/amd64 for single-platform builds)
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -o /build/tkn-results github.com/tektoncd/results/cmd/tkn-results
 
 # Second stage: Create the final container image
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
+ARG VERSION=0.1.0
+ARG RELEASE=1
+
 LABEL \
+    com.redhat.component="segment-bridge-container" \
+    name="segment-bridge" \
+    version="${VERSION}" \
+    release="${RELEASE}" \
+    vendor="Red Hat, Inc." \
+    url="https://github.com/konflux-ci/segment-bridge" \
+    distribution-scope="public" \
     description="Tekton Results to Segment bridge for anonymous PipelineRun telemetry" \
     io.k8s.description="Tekton Results to Segment bridge for anonymous PipelineRun telemetry" \
     io.k8s.display-name="Segment Bridge" \
@@ -36,10 +58,10 @@ LABEL \
     summary="This image contains tools and scripts for fetching anonymous \
 PipelineRun execution metrics from Tekton Results API and sending them to Segment."
 
-RUN microdnf install -y --nodocs \
-        jq \
-        bash \
-        curl \
+# Install runtime dependencies.
+# bash and curl (curl-minimal) are already included in ubi-minimal.
+# In hermetic builds, jq is supplied by Cachi2 RPM prefetching (see rpms.in.yaml).
+RUN microdnf install -y --nodocs jq \
     && microdnf clean all \
     && rm -rf /var/cache/yum
 

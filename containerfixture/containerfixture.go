@@ -165,7 +165,6 @@ func WithServiceContainer(t *testing.T, ServiceManifest string, testFunc func(Fi
 	defer cleanup(t, deployment.PodName)
 
 	testFunc(deployment)
-	return
 }
 
 type PodDefinition struct {

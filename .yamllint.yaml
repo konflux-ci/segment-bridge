@@ -5,3 +5,5 @@ rules:
     max-spaces-inside: -1
 ignore:
   - .tekton/
+  - rpms.in.yaml
+  - rpms.lock.yaml

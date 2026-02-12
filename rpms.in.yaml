@@ -1,0 +1,14 @@
+# RPM dependencies to be prefetched by Cachi2/Hermeto for hermetic builds.
+# These packages are installed via microdnf in the Dockerfile runtime stage.
+# bash and curl-minimal are already included in the ubi-minimal base image.
+#
+# To regenerate rpms.lock.yaml after changes:
+#   rpm-lockfile-prototype --image registry.access.redhat.com/ubi9/ubi-minimal:latest rpms.in.yaml
+packages:
+  - jq
+contentOrigin:
+  repofiles:
+    - "./ubi.repo"
+arches:
+  - x86_64
+  - aarch64

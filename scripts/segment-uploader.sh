@@ -2,9 +2,12 @@
 # segment-uploader.sh
 #   Get Segemnt event records from STDIN (One per-line) and POST them to the
 #   Segment batch API. The API is limited to max request size of 500KB, so no
-#   more then that should be sent as input.
-#   This script assumes we have a .netrc file with suitable credentials for
-#   Segment
+#   more than that should be sent as input.
+#
+#   Authentication: Uses curl's --netrc-file for authentication in all cases.
+#   Two deployment modes:
+#     1. Direct to Segment: .netrc has "machine api.segment.io"
+#     2. Via proxy: .netrc has "machine <proxy-host>"
 #
 set -o pipefail -o errexit -o nounset
 
@@ -17,12 +20,13 @@ PATH="$SELFDIR:${PATH#"$SELFDIR":}"
 # The following variables can be set from outside the script by setting
 # similarly named environment variables.
 #
-# The Segment API URL to use:
+# The Segment API URL to use (can be Segment directly or a proxy endpoint):
 SEGMENT_BATCH_API="${SEGMENT_BATCH_API:-https://api.segment.io/v1/batch}"
 # How many times to rety calling into Segment
 SEGMENT_RETRIES="${SEGMENT_RETRIES:-3}"
 #
-# A .netrc file to load credentials from
+# A .netrc file to load credentials from.
+# Defaults to $HOME/.netrc for local testing convenience.
 CURL_NETRC="${CURL_NETRC:-$HOME/.netrc}"
 #
 # === End of parameters ===
@@ -34,4 +38,4 @@ mk-segment-batch-payload.sh | \
     --header "Content-Type: application/json" \
     --fail --fail-early \
     --retry "$SEGMENT_RETRIES" \
-    --data @- \
+    --data @-

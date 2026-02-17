@@ -82,7 +82,7 @@ transform_record() {
       namespaceHash: $ns_hash,
       taskCount: $taskCount,
       hasPipelineLabel: (.metadata.labels["tekton.dev/pipeline"] != null),
-      isKonfluxBuild: (.metadata.labels["appstudio.openshift.io/application"] != null)
+      pipelineType: .metadata.labels["pipelines.appstudio.openshift.io/type"]
     } as $commonProps |
 
     # Event 1: PipelineRun Started
@@ -100,10 +100,9 @@ transform_record() {
       event: "PipelineRun Completed",
       properties: ($commonProps + {
         startTime: .status.startTime,
-        endTime: .status.completionTime,
+        completionTime: .status.completionTime,
         durationSeconds: $duration,
-        status: ($cond.reason // "Unknown"),
-        succeeded: ($cond.status == "True")
+        status: ($cond.reason // "Unknown")
       })
     })
   '

@@ -15,7 +15,6 @@ metadata:
     appstudio.openshift.io/component: segment-bridge
     pipelines.appstudio.openshift.io/type: build
   name: segment-bridge-on-pull-request
-  namespace: rhtap-o11y-tenant
 spec:
   params:
   - name: dockerfile

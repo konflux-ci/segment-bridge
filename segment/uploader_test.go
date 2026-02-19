@@ -35,7 +35,27 @@ type segmentBatch struct {
 	Batch []map[string]any
 }
 
+// requireTools verifies that the external tools needed by the upload scripts
+// are available. GNU coreutils split is required because the uploader uses
+// --line-bytes and --filter which BSD split does not support.
+func requireTools(t *testing.T) {
+	t.Helper()
+	for _, tool := range []string{"curl", "jq"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Fatalf("Required tool %q not found in PATH", tool)
+		}
+	}
+	if _, err := exec.LookPath("split"); err != nil {
+		t.Fatal("Required tool \"split\" not found in PATH")
+	}
+	// GNU split prints version info and exits 0; BSD split rejects --version.
+	if err := exec.Command("split", "--version").Run(); err != nil {
+		t.Fatal("GNU coreutils split required (need --line-bytes and --filter support)")
+	}
+}
+
 func TestUploader(t *testing.T) {
+	requireTools(t)
 	script, err := scripts.LookPath("segment-mass-uploader.sh")
 	if err != nil {
 		t.Fatalf("Failed to find script to test: %v", err)

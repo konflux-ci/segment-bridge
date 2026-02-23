@@ -20,10 +20,10 @@
 # First stage: Build the tkn-results binary
 FROM registry.access.redhat.com/ubi9/go-toolset:9.5-1739801907 AS builder
 WORKDIR /build
-# Build tkn-results binary for linux/amd64
 ENV GOOS=linux
 ENV GOARCH=amd64
-RUN go build -o /build/tkn-results github.com/tektoncd/results/cmd/tkn-results@latest
+RUN go install github.com/tektoncd/results/cmd/tkn-results@v0.14.0 && \
+    cp "$(go env GOPATH)/bin/tkn-results" /build/tkn-results
 
 # Second stage: Create the final container image
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
@@ -39,7 +39,6 @@ PipelineRun execution metrics from Tekton Results API and sending them to Segmen
 RUN microdnf install -y --nodocs \
         jq \
         bash \
-        curl \
     && microdnf clean all \
     && rm -rf /var/cache/yum
 

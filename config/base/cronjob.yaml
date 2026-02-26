@@ -1,0 +1,42 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app.kubernetes.io/name: segment-bridge
+  name: segment-bridge
+  namespace: segment-bridge
+spec:
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - envFrom:
+                - secretRef:
+                    name: segment-bridge-config
+                    optional: true
+              image: quay.io/konflux-ci/segment-bridge:latest
+              imagePullPolicy: IfNotPresent
+              name: segment-bridge
+              resources:
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          serviceAccountName: segment-bridge
+  schedule: 0 * * * *

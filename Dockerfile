@@ -18,7 +18,7 @@
 #
 
 # First stage: Build the tkn-results binary
-FROM registry.access.redhat.com/ubi9/go-toolset:9.5-1739801907 AS builder
+FROM registry.access.redhat.com/ubi9/go-toolset:9.7-1771417345 AS builder
 WORKDIR /build
 ENV GOOS=linux
 ENV GOARCH=amd64

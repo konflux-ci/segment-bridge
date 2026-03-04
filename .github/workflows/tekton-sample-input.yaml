@@ -29,3 +29,7 @@ jobs:
         run: ./tekton-to-segment/sample/prepare-input.sh
       - name: Check input.json is up-to-date
         run: git diff --exit-code tekton-to-segment/sample/input.json
+      - name: Regenerate tekton-to-segment sample expected output
+        run: ./tekton-to-segment/sample/prepare-expected.sh
+      - name: Check expected.json is up-to-date
+        run: git diff --exit-code tekton-to-segment/sample/expected.json

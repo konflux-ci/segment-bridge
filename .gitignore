@@ -13,3 +13,6 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Temporary generator script (do not commit; used locally to bootstrap expected/)
+tekton-to-segment/sample/generate-expected.sh

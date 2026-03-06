@@ -1,0 +1,30 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-oci-ta","bundle":"latest"}'
+    build.appstudio.openshift.io/status: '{"pac":{"state":"enabled","merge-url":"https://github.com/ifireball/testrepo/pull/4","configuration-time":"Tue,
+      03 Mar 2026 10:44:06 UTC"},"message":"done"}'
+    git-provider: github
+    git-provider-url: https://github.com
+    test.appstudio.openshift.io/lastbuilttime: "1772536344"
+  creationTimestamp: "2026-03-03T10:43:53Z"
+  finalizers:
+  - test.appstudio.openshift.io/component
+  - pac.component.appstudio.openshift.io/finalizer
+  generation: 3
+  name: testrepo-d69b0
+  namespace: default-tenant
+  resourceVersion: "9765929"
+  uid: 474711b9-74b8-4ec8-a98b-36f0f6b77c09
+spec:
+  application: testrepo-app
+  componentName: testrepo-d69b0
+  containerImage: quay.io/kborren-konflux-ci-test/default-tenant/testrepo-d69b0
+  resources: {}
+  source:
+    git:
+      url: https://github.com/ifireball/testrepo.git
+status:
+  lastBuiltCommit: faef902212a6c7cd3c6a79fa778410972259ef03
+  lastPromotedImage: quay.io/kborren-konflux-ci-test/default-tenant/testrepo-d69b0@sha256:348f0dc84dd05b5ca3f9214a4dde9c0886eda434c437426be2b33f063ebbfe4a

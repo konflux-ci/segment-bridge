@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: "2026-02-17T14:42:19Z"
+  labels:
+    konflux-ci.dev/type: tenant
+    konflux.konflux-ci.dev/component: default-tenant
+    konflux.konflux-ci.dev/owner: konflux-default-tenant
+    kubernetes.io/metadata.name: default-tenant
+  name: default-tenant
+  ownerReferences:
+  - apiVersion: konflux.konflux-ci.dev/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: KonfluxDefaultTenant
+    name: konflux-default-tenant
+    uid: 3073e8a2-af89-4abc-a9da-43f213fdd0c9
+  resourceVersion: "4268"
+  uid: 1e11a3b6-b46a-4b62-83d3-13cf2edbddec
+spec:
+  finalizers:
+  - kubernetes
+status:
+  phase: Active

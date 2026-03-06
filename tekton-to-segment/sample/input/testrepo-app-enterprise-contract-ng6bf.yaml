@@ -1,0 +1,250 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  annotations:
+    build.appstudio.openshift.io/repo: https://github.com/ifireball/testrepo?rev=6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    build.appstudio.redhat.com/commit_sha: 6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    build.appstudio.redhat.com/target_branch: main
+    chains.tekton.dev/signed: "true"
+    pac.test.appstudio.openshift.io/branch: main
+    pac.test.appstudio.openshift.io/cancel-in-progress: "false"
+    pac.test.appstudio.openshift.io/check-run-id: "65677721631"
+    pac.test.appstudio.openshift.io/controller-info: '{"name":"default","configmap":"pipelines-as-code","secret":"pipelines-as-code-secret",
+      "gRepo": "pipelines-as-code"}'
+    pac.test.appstudio.openshift.io/event-type: push
+    pac.test.appstudio.openshift.io/git-auth-secret: pac-gitauth-yrisvy
+    pac.test.appstudio.openshift.io/git-provider: github
+    pac.test.appstudio.openshift.io/installation-id: "113709859"
+    pac.test.appstudio.openshift.io/log-url: https://localhost:9443/ns/default-tenant/pipelinerun/testrepo-app-enterprise-contract-ng6bf
+    pac.test.appstudio.openshift.io/max-keep-runs: "3"
+    pac.test.appstudio.openshift.io/on-cel-expression: event == "push" && target_branch
+      == "main"
+    pac.test.appstudio.openshift.io/original-prname: testrepo-d69b0-on-push
+    pac.test.appstudio.openshift.io/repo-url: https://github.com/ifireball/testrepo
+    pac.test.appstudio.openshift.io/repository: testrepo-d69b0
+    pac.test.appstudio.openshift.io/scm-reporting-plr-started: "true"
+    pac.test.appstudio.openshift.io/sender: ifireball
+    pac.test.appstudio.openshift.io/sha: 6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    pac.test.appstudio.openshift.io/sha-title: |-
+      chore: retrigger release (standing-attribution fix)
+
+      Made-with: Cursor
+    pac.test.appstudio.openshift.io/sha-url: https://github.com/ifireball/testrepo/commit/6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    pac.test.appstudio.openshift.io/source-branch: refs/heads/main
+    pac.test.appstudio.openshift.io/source-repo-url: https://github.com/ifireball/testrepo
+    pac.test.appstudio.openshift.io/state: completed
+    pac.test.appstudio.openshift.io/url-org: ifireball
+    pac.test.appstudio.openshift.io/url-repository: testrepo
+    results.tekton.dev/childReadyForDeletion: "true"
+    results.tekton.dev/record: default-tenant/results/a7e5c48f-9c1d-4739-b0dd-d698670508ef/records/a7e5c48f-9c1d-4739-b0dd-d698670508ef
+    results.tekton.dev/result: default-tenant/results/a7e5c48f-9c1d-4739-b0dd-d698670508ef
+    results.tekton.dev/stored: "true"
+    test.appstudio.openshift.io/added-to-global-candidate-list: '{"result":true,"reason":"Success","lastupdatedtime":"2026-03-04T07:49:26Z"}'
+    test.appstudio.openshift.io/integration-workflow: push
+    test.appstudio.openshift.io/kind: enterprise-contract
+    test.appstudio.openshift.io/pipelinerunstarttime: "1772610388000"
+    test.appstudio.openshift.io/source-repo-url: https://github.com/ifireball/testrepo
+    test.appstudio.openshift.io/status: '[{"scenario":"testrepo-app-enterprise-contract","status":"Pending","lastUpdateTime":"2026-03-04T07:49:27.800365688Z","details":"Pending"}]'
+  creationTimestamp: "2026-03-04T07:49:27Z"
+  finalizers:
+  - chains.tekton.dev/pipelinerun
+  - results.tekton.dev/pipelinerun
+  generateName: testrepo-app-enterprise-contract-
+  generation: 1
+  labels:
+    appstudio.openshift.io/application: testrepo-app
+    appstudio.openshift.io/component: testrepo-d69b0
+    appstudio.openshift.io/snapshot: testrepo-app-20260304-074628-000
+    build.appstudio.redhat.com/pipeline: enterprise-contract
+    pac.test.appstudio.openshift.io/cancel-in-progress: "false"
+    pac.test.appstudio.openshift.io/check-run-id: "65677721631"
+    pac.test.appstudio.openshift.io/event-type: push
+    pac.test.appstudio.openshift.io/original-prname: testrepo-d69b0-on-push
+    pac.test.appstudio.openshift.io/repository: testrepo-d69b0
+    pac.test.appstudio.openshift.io/sha: 6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    pac.test.appstudio.openshift.io/state: completed
+    pac.test.appstudio.openshift.io/url-org: ifireball
+    pac.test.appstudio.openshift.io/url-repository: testrepo
+    pipelines.appstudio.openshift.io/type: test
+    tekton.dev/pipeline: enterprise-contract
+    test.appstudio.openshift.io/pipelinerunfinishtime: "1772610561"
+    test.appstudio.openshift.io/scenario: testrepo-app-enterprise-contract
+    test.appstudio.openshift.io/type: component
+  name: testrepo-app-enterprise-contract-ng6bf
+  namespace: default-tenant
+  ownerReferences:
+  - apiVersion: appstudio.redhat.com/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Snapshot
+    name: testrepo-app-20260304-074628-000
+    uid: 76ae2df4-a76c-4e19-9d06-16d51659c137
+  resourceVersion: "10388689"
+  uid: a7e5c48f-9c1d-4739-b0dd-d698670508ef
+spec:
+  params:
+  - name: SNAPSHOT
+    value: '{"application":"testrepo-app","components":[{"name":"testrepo-d69b0","containerImage":"quay.io/kborren-konflux-ci-test/default-tenant/testrepo-d69b0@sha256:63f34887efed588d01508a1135ce68fbec93fcfb489c68f022fcecf47ebafd26","source":{"git":{"url":"https://github.com/ifireball/testrepo","revision":"6feccf53bf4a89e8293eadf3d69cfe49d3244f2d"}}}],"artifacts":{}}'
+  pipelineRef:
+    params:
+    - name: url
+      value: https://github.com/konflux-ci/build-definitions
+    - name: revision
+      value: main
+    - name: pathInRepo
+      value: pipelines/enterprise-contract.yaml
+    resolver: git
+  taskRunTemplate:
+    serviceAccountName: konflux-integration-runner
+  timeouts:
+    pipeline: 1h0m0s
+status:
+  childReferences:
+  - apiVersion: tekton.dev/v1
+    kind: TaskRun
+    name: testrepo-app-enterprise-contract-ng6bf-verify
+    pipelineTaskName: verify
+  completionTime: "2026-03-04T07:49:50Z"
+  conditions:
+  - lastTransitionTime: "2026-03-04T07:49:50Z"
+    message: 'Tasks Completed: 1 (Failed: 0, Cancelled 0), Skipped: 0'
+    reason: Succeeded
+    status: "True"
+    type: Succeeded
+  pipelineSpec:
+    params:
+    - description: |
+        Spec section of an ApplicationSnapshot resource. Not all fields of the
+        resource are required. A minimal example:
+          {
+            "components": [
+              {
+                "containerImage": "quay.io/example/repo:latest"
+              }
+            ]
+          }
+        Each "containerImage" in the "components" array is validated.
+      name: SNAPSHOT
+      type: string
+    - default: enterprise-contract-service/default
+      description: |
+        Name of the policy configuration (EnterpriseContractConfiguration
+        object) to use. `namespace/name` or `name` syntax supported. If
+        namespace is omitted the namespace where the task runs is used.
+      name: POLICY_CONFIGURATION
+      type: string
+    - default: ""
+      description: |
+        Path to a directory containing SSL certs to be used when communicating
+        with external services. This is useful when using the integrated registry
+        and a local instance of Rekor on a development cluster which may use
+        certificates issued by a not-commonly trusted root CA. In such cases,
+        "/var/run/secrets/kubernetes.io/serviceaccount" is a good value. Multiple
+        paths can be provided by using the ":" separator.
+      name: SSL_CERT_DIR
+      type: string
+    - default: k8s://openshift-pipelines/public-key
+      description: |
+        Public key used to verify signatures. Must be a valid k8s cosign
+        reference, e.g. k8s://my-space/my-secret where my-secret contains
+        the expected cosign.pub attribute.
+      name: PUBLIC_KEY
+      type: string
+    - default: "1"
+      description: Number of parallel workers to use for policy evaluation.
+      name: WORKERS
+      type: string
+    - default: trusted-ca
+      description: The name of the ConfigMap to read CA bundle data from.
+      name: CA_TRUST_CONFIGMAP_NAME
+      type: string
+    - default: ca-bundle.crt
+      description: The name of the key in the ConfigMap that contains the CA bundle
+        data.
+      name: CA_TRUST_CONFIG_MAP_KEY
+      type: string
+    - default: ""
+      description: Merge additional Rego variables into the policy data. Use syntax
+        "key=value,key2=value2..."
+      name: EXTRA_RULE_DATA
+      type: string
+    - default: "false"
+      description: Reduce the Snapshot to only the component whose build caused the
+        Snapshot to be created
+      name: SINGLE_COMPONENT
+      type: string
+    - default: pr/$(context.pipelineRun.name)
+      description: PipelineRun ID
+      name: SINGLE_COMPONENT_CUSTOM_RESOURCE
+      type: string
+    - default: "true"
+      description: |
+        A boolean flag that determines whether the result of the test will mark the TaskRun as passing or not.
+        Swap to false to make the IntegrationTestScenario informative.
+
+        Setting to false is useful on specific conditions but will always mark the integration test as successful and
+        humans will tend to ignore the test results if they failed. Use with caution.
+      name: STRICT
+      type: string
+    results:
+    - description: ""
+      name: TEST_OUTPUT
+      value: $(tasks.verify.results.TEST_OUTPUT)
+    tasks:
+    - name: verify
+      params:
+      - name: POLICY_CONFIGURATION
+        value: enterprise-contract-service/default
+      - name: IMAGES
+        value: '{"application":"testrepo-app","components":[{"name":"testrepo-d69b0","containerImage":"quay.io/kborren-konflux-ci-test/default-tenant/testrepo-d69b0@sha256:63f34887efed588d01508a1135ce68fbec93fcfb489c68f022fcecf47ebafd26","source":{"git":{"url":"https://github.com/ifireball/testrepo","revision":"6feccf53bf4a89e8293eadf3d69cfe49d3244f2d"}}}],"artifacts":{}}'
+      - name: SSL_CERT_DIR
+        value: ""
+      - name: STRICT
+        value: "true"
+      - name: PUBLIC_KEY
+        value: k8s://openshift-pipelines/public-key
+      - name: IGNORE_REKOR
+        value: "true"
+      - name: WORKERS
+        value: "1"
+      - name: CA_TRUST_CONFIGMAP_NAME
+        value: trusted-ca
+      - name: CA_TRUST_CONFIG_MAP_KEY
+        value: ca-bundle.crt
+      - name: EXTRA_RULE_DATA
+        value: ""
+      - name: SINGLE_COMPONENT
+        value: "false"
+      - name: SINGLE_COMPONENT_CUSTOM_RESOURCE
+        value: pr/testrepo-app-enterprise-contract-ng6bf
+      taskRef:
+        params:
+        - name: bundle
+          value: quay.io/conforma/tekton-task:latest@sha256:2d5d51c5402cae2d521affbb280fcd00d2ea39fe63be80375f2663afe6c30e96
+        - name: name
+          value: verify-enterprise-contract
+        - name: kind
+          value: task
+        resolver: bundles
+      timeout: 4h0m0s
+  provenance:
+    featureFlags:
+      awaitSidecarReadiness: true
+      coschedule: workspaces
+      enableAPIFields: beta
+      enableProvenanceInStatus: true
+      enforceNonfalsifiability: none
+      maxResultSize: 4096
+      resultExtractionMethod: termination-message
+      runningInEnvWithInjectedSidecars: true
+      verificationNoMatchPolicy: ignore
+    refSource:
+      digest:
+        sha1: 5ca90f1cdd5a5fb2b782514da0332c2dc3522705
+      entryPoint: pipelines/enterprise-contract.yaml
+      uri: git+https://github.com/konflux-ci/build-definitions
+  results:
+  - name: TEST_OUTPUT
+    value: |
+      {"timestamp":"1772610588","namespace":"","successes":20,"failures":0,"warnings":0,"result":"SUCCESS"}
+  startTime: "2026-03-04T07:49:27Z"

@@ -1,0 +1,17 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Application
+metadata:
+  creationTimestamp: "2026-03-03T09:45:50Z"
+  finalizers:
+  - application-secret-link-to-integration-tests-sa.appstudio.openshift.io/finalizer
+  generation: 2
+  name: testrepo-app
+  namespace: default-tenant
+  resourceVersion: "9718607"
+  uid: 13250a0d-f7fd-4851-8707-75de19aa2498
+spec:
+  appModelRepository:
+    url: ""
+  displayName: testrepo-app
+  gitOpsRepository:
+    url: ""

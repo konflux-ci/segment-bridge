@@ -115,6 +115,10 @@ while IFS= read -r record; do
   # Skip empty lines
   [[ -z "$record" ]] && continue
 
+  # Process only PipelineRun resources
+  kind=$(echo "$record" | jq -r '.kind // ""')
+  [[ "$kind" != "PipelineRun" ]] && continue
+
   # Extract namespace and compute SHA256 hash
   ns=$(echo "$record" | jq -r '.metadata.namespace // "unknown"')
   ns_hash=$(hash_namespace "$ns")

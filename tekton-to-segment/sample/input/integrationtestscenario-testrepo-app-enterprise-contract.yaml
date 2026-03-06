@@ -1,0 +1,30 @@
+apiVersion: appstudio.redhat.com/v1beta2
+kind: IntegrationTestScenario
+metadata:
+  annotations:
+    test.appstudio.openshift.io/kind: enterprise-contract
+  creationTimestamp: "2026-03-03T09:45:50Z"
+  generation: 1
+  name: testrepo-app-enterprise-contract
+  namespace: default-tenant
+  ownerReferences:
+  - apiVersion: appstudio.redhat.com/v1alpha1
+    blockOwnerDeletion: false
+    controller: false
+    kind: Application
+    name: testrepo-app
+    uid: 13250a0d-f7fd-4851-8707-75de19aa2498
+  resourceVersion: "9718610"
+  uid: 0b5c37b8-b630-400e-acd2-de51c801d33d
+spec:
+  application: testrepo-app
+  resolverRef:
+    params:
+    - name: url
+      value: https://github.com/konflux-ci/build-definitions
+    - name: revision
+      value: main
+    - name: pathInRepo
+      value: pipelines/enterprise-contract.yaml
+    resolver: git
+    resourceKind: pipeline

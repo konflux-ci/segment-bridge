@@ -1,0 +1,99 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Snapshot
+metadata:
+  annotations:
+    build.appstudio.openshift.io/repo: https://github.com/ifireball/testrepo?rev=6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    build.appstudio.redhat.com/commit_sha: 6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    build.appstudio.redhat.com/target_branch: main
+    pac.test.appstudio.openshift.io/branch: main
+    pac.test.appstudio.openshift.io/cancel-in-progress: "false"
+    pac.test.appstudio.openshift.io/check-run-id: "65677721631"
+    pac.test.appstudio.openshift.io/controller-info: '{"name":"default","configmap":"pipelines-as-code","secret":"pipelines-as-code-secret",
+      "gRepo": "pipelines-as-code"}'
+    pac.test.appstudio.openshift.io/event-type: push
+    pac.test.appstudio.openshift.io/git-auth-secret: pac-gitauth-yrisvy
+    pac.test.appstudio.openshift.io/git-provider: github
+    pac.test.appstudio.openshift.io/installation-id: "113709859"
+    pac.test.appstudio.openshift.io/log-url: https://localhost:9443/ns/default-tenant/pipelinerun/testrepo-d69b0-on-push-9kdpb
+    pac.test.appstudio.openshift.io/max-keep-runs: "3"
+    pac.test.appstudio.openshift.io/on-cel-expression: event == "push" && target_branch
+      == "main"
+    pac.test.appstudio.openshift.io/original-prname: testrepo-d69b0-on-push
+    pac.test.appstudio.openshift.io/repo-url: https://github.com/ifireball/testrepo
+    pac.test.appstudio.openshift.io/repository: testrepo-d69b0
+    pac.test.appstudio.openshift.io/scm-reporting-plr-started: "true"
+    pac.test.appstudio.openshift.io/sender: ifireball
+    pac.test.appstudio.openshift.io/sha: 6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    pac.test.appstudio.openshift.io/sha-title: |-
+      chore: retrigger release (standing-attribution fix)
+
+      Made-with: Cursor
+    pac.test.appstudio.openshift.io/sha-url: https://github.com/ifireball/testrepo/commit/6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    pac.test.appstudio.openshift.io/source-branch: refs/heads/main
+    pac.test.appstudio.openshift.io/source-repo-url: https://github.com/ifireball/testrepo
+    pac.test.appstudio.openshift.io/state: completed
+    pac.test.appstudio.openshift.io/url-org: ifireball
+    pac.test.appstudio.openshift.io/url-repository: testrepo
+    test.appstudio.openshift.io/added-to-global-candidate-list: '{"result":true,"reason":"Success","lastupdatedtime":"2026-03-04T07:49:26Z"}'
+    test.appstudio.openshift.io/git-reporter-status: '{"scenarios":{"testrepo-app-enterprise-contract-testrepo-app-20260304-074628-000":{"lastUpdateTime":"2026-03-04T07:49:50.723684492Z"}}}'
+    test.appstudio.openshift.io/integration-workflow: push
+    test.appstudio.openshift.io/pipelinerunstarttime: "1772610388000"
+    test.appstudio.openshift.io/source-repo-url: https://github.com/ifireball/testrepo
+    test.appstudio.openshift.io/status: '[{"scenario":"testrepo-app-enterprise-contract","status":"TestPassed","lastUpdateTime":"2026-03-04T07:49:50.723684492Z","details":"Integration
+      test passed","startTime":"2026-03-04T07:49:28.198389019Z","completionTime":"2026-03-04T07:49:50.723684492Z","testPipelineRunName":"testrepo-app-enterprise-contract-ng6bf"}]'
+  creationTimestamp: "2026-03-04T07:49:27Z"
+  generation: 1
+  labels:
+    appstudio.openshift.io/application: testrepo-app
+    appstudio.openshift.io/build-pipelinerun: testrepo-d69b0-on-push-9kdpb
+    appstudio.openshift.io/component: testrepo-d69b0
+    pac.test.appstudio.openshift.io/cancel-in-progress: "false"
+    pac.test.appstudio.openshift.io/check-run-id: "65677721631"
+    pac.test.appstudio.openshift.io/event-type: push
+    pac.test.appstudio.openshift.io/original-prname: testrepo-d69b0-on-push
+    pac.test.appstudio.openshift.io/repository: testrepo-d69b0
+    pac.test.appstudio.openshift.io/sha: 6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+    pac.test.appstudio.openshift.io/state: completed
+    pac.test.appstudio.openshift.io/url-org: ifireball
+    pac.test.appstudio.openshift.io/url-repository: testrepo
+    test.appstudio.openshift.io/pipelinerunfinishtime: "1772610561"
+    test.appstudio.openshift.io/type: component
+  name: testrepo-app-20260304-074628-000
+  namespace: default-tenant
+  ownerReferences:
+  - apiVersion: appstudio.redhat.com/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Application
+    name: testrepo-app
+    uid: 13250a0d-f7fd-4851-8707-75de19aa2498
+  resourceVersion: "10388611"
+  uid: 76ae2df4-a76c-4e19-9d06-16d51659c137
+spec:
+  application: testrepo-app
+  artifacts: {}
+  components:
+  - containerImage: quay.io/kborren-konflux-ci-test/default-tenant/testrepo-d69b0@sha256:63f34887efed588d01508a1135ce68fbec93fcfb489c68f022fcecf47ebafd26
+    name: testrepo-d69b0
+    source:
+      git:
+        revision: 6feccf53bf4a89e8293eadf3d69cfe49d3244f2d
+        url: https://github.com/ifireball/testrepo
+status:
+  conditions:
+  - lastTransitionTime: "2026-03-04T07:49:50Z"
+    message: Snapshot integration status condition is finished since all testing pipelines
+      completed
+    reason: Finished
+    status: "True"
+    type: AppStudioIntegrationStatus
+  - lastTransitionTime: "2026-03-04T07:49:50Z"
+    message: All Integration Pipeline tests passed
+    reason: Passed
+    status: "True"
+    type: AppStudioTestSucceeded
+  - lastTransitionTime: "2026-03-04T07:49:51Z"
+    message: The Snapshot was auto-released
+    reason: AutoReleased
+    status: "True"
+    type: AutoReleased

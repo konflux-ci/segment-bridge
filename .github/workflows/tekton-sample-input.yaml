@@ -1,0 +1,36 @@
+---
+name: Tekton sample input up-to-date
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+jobs:
+  sample-input-up-to-date:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      # jq 1.7 and yq v4.44.3 (mikefarah/yq) — pin versions so CI matches local
+      - name: Install jq
+        run: |
+          sudo curl -sSL -o /usr/local/bin/jq \
+            "https://github.com/stedolan/jq/releases/download/jq-1.7/jq-linux64"
+          sudo chmod +x /usr/local/bin/jq
+      - name: Install yq
+        run: |
+          sudo curl -sSL -o /usr/local/bin/yq \
+            "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+      - name: Regenerate tekton-to-segment sample input
+        run: ./tekton-to-segment/sample/prepare-input.sh
+      - name: Check input.json is up-to-date
+        run: git diff --exit-code tekton-to-segment/sample/input.json
+      - name: Regenerate tekton-to-segment sample expected output
+        run: ./tekton-to-segment/sample/prepare-expected.sh
+      - name: Check expected.json is up-to-date
+        run: git diff --exit-code tekton-to-segment/sample/expected.json

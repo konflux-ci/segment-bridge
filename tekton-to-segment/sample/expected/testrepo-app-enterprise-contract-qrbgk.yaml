@@ -1,0 +1,34 @@
+anonymousId: anonymous
+context:
+  library:
+    name: segment-bridge
+    version: 2.0.0
+event: PipelineRun Started
+messageId: d70b4131-f1fb-4588-b391-3d5397f97f3f-started
+properties:
+  hasPipelineLabel: true
+  namespaceHash: 01618a158dc1
+  pipelineType: test
+  taskCount: 1
+timestamp: "2026-03-03T11:10:07Z"
+type: track
+---
+anonymousId: anonymous
+context:
+  library:
+    name: segment-bridge
+    version: 2.0.0
+event: PipelineRun Completed
+messageId: d70b4131-f1fb-4588-b391-3d5397f97f3f-completed
+properties:
+  completionTime: "2026-03-03T11:11:16Z"
+  durationSeconds: 69
+  hasPipelineLabel: true
+  namespaceHash: 01618a158dc1
+  pipelineType: test
+  startTime: "2026-03-03T11:10:07Z"
+  status: Succeeded
+  taskCount: 1
+timestamp: "2026-03-03T11:11:16Z"
+type: track
+

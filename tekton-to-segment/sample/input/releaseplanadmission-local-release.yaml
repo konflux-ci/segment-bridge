@@ -1,0 +1,54 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlanAdmission
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"appstudio.redhat.com/v1alpha1","kind":"ReleasePlanAdmission","metadata":{"annotations":{},"labels":{"release.appstudio.openshift.io/auto-release":"true"},"name":"local-release","namespace":"default-managed-tenant"},"spec":{"applications":["testrepo-app"],"data":{"mapping":{"components":[{"name":"testrepo-d69b0","repository":"quay.io/kborren-konflux-ci-test/default-managed-tenant/testrepo-d69b0"}],"defaults":{"pushSourceContainer":false,"tags":["latest","{{ git_sha }}"]}}},"origin":"default-tenant","pipeline":{"pipelineRef":{"ociStorage":"quay.io/kborren-konflux-ci-test/default-managed-tenant/trusted-artifacts","params":[{"name":"url","value":"https://github.com/konflux-ci/release-service-catalog.git"},{"name":"revision","value":"production"},{"name":"pathInRepo","value":"pipelines/managed/push-to-external-registry/push-to-external-registry.yaml"}],"resolver":"git","useEmptyDir":true},"serviceAccountName":"release-pipeline"},"policy":"default"}}
+  creationTimestamp: "2026-03-04T07:31:02Z"
+  generation: 1
+  labels:
+    release.appstudio.openshift.io/auto-release: "true"
+    release.appstudio.openshift.io/block-releases: "false"
+  name: local-release
+  namespace: default-managed-tenant
+  resourceVersion: "10376591"
+  uid: 1fd22217-02dd-44ab-9240-5b4e1607978d
+spec:
+  applications:
+  - testrepo-app
+  data:
+    mapping:
+      components:
+      - name: testrepo-d69b0
+        repository: quay.io/kborren-konflux-ci-test/default-managed-tenant/testrepo-d69b0
+      defaults:
+        pushSourceContainer: false
+        tags:
+        - latest
+        - '{{ git_sha }}'
+  origin: default-tenant
+  pipeline:
+    pipelineRef:
+      ociStorage: quay.io/kborren-konflux-ci-test/default-managed-tenant/trusted-artifacts
+      params:
+      - name: url
+        value: https://github.com/konflux-ci/release-service-catalog.git
+      - name: revision
+        value: production
+      - name: pathInRepo
+        value: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
+      resolver: git
+      useEmptyDir: true
+    serviceAccountName: release-pipeline
+    timeouts: {}
+  policy: default
+status:
+  conditions:
+  - lastTransitionTime: "2026-03-04T07:31:03Z"
+    message: ""
+    reason: Matched
+    status: "True"
+    type: Matched
+  releasePlans:
+  - active: true
+    name: default-tenant/local-release

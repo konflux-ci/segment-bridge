@@ -2,6 +2,7 @@
 repos:
   - hooks:
       - id: yamllint
+        exclude: ^tekton-to-segment/sample/
     repo: https://github.com/adrienverge/yamllint
     rev: v1.35.1
   - hooks:

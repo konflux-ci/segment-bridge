@@ -1,0 +1,27 @@
+apiVersion: konflux.konflux-ci.dev/v1alpha1
+kind: KonfluxDefaultTenant
+metadata:
+  creationTimestamp: "2026-02-17T14:42:19Z"
+  generation: 1
+  labels:
+    konflux.konflux-ci.dev/component: konflux
+    konflux.konflux-ci.dev/owner: konflux
+  name: konflux-default-tenant
+  ownerReferences:
+  - apiVersion: konflux.konflux-ci.dev/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Konflux
+    name: konflux
+    uid: 8208a728-391e-47da-a461-26e9e6f48ada
+  resourceVersion: "4392"
+  uid: 3073e8a2-af89-4abc-a9da-43f213fdd0c9
+spec: {}
+status:
+  conditions:
+  - lastTransitionTime: "2026-02-17T14:42:19Z"
+    message: Component ready (no deployments to track)
+    observedGeneration: 1
+    reason: AllComponentsReady
+    status: "True"
+    type: Ready

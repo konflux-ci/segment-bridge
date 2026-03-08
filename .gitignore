@@ -16,3 +16,6 @@
 
 # Links created by the mise plugin
 .vscode/mise-tools/
+
+# Project-local Python venv (pre-commit, etc.)
+.venv/

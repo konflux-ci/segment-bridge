@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"context"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -15,6 +17,19 @@ import (
 	"github.com/redhat-appstudio/segment-bridge.git/scripts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const scriptPath = "../scripts/get-konflux-public-info.sh"
@@ -53,22 +68,42 @@ func parseExpectedEnv(filePath string) (map[string]string, error) {
 	return parseEnv(string(data))
 }
 
-// applyInputDir ensures konflux-info namespace exists, then runs oc apply -f for each YAML in inputDir.
+// buildRestConfig returns a rest.Config from KUBECONFIG (set by kwok.SetKubeconfigWithPort).
+func buildRestConfig(t *testing.T) *rest.Config {
+	t.Helper()
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	configOverrides := &clientcmd.ConfigOverrides{}
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides).ClientConfig()
+	require.NoError(t, err, "build rest config from KUBECONFIG")
+	return config
+}
+
+// applyInputDir ensures konflux-info namespace exists, then applies each YAML in inputDir using the Kubernetes Go client.
 // Waits for the cluster API to be ready before applying (kwok can take a few seconds to start).
 // Skips namespace YAMLs for namespaces that already exist (e.g. kube-system) to avoid conflicts.
 func applyInputDir(t *testing.T, inputDir string) {
 	t.Helper()
+	ctx := context.Background()
+	config := buildRestConfig(t)
+
+	clientset, err := kubernetes.NewForConfig(config)
+	require.NoError(t, err, "create kubernetes clientset")
+	_, err = clientset.Discovery().RESTClient().Get().AbsPath("/api").DoRaw(ctx)
+	require.NoError(t, err, "cluster API not ready")
+	dynClient, err := dynamic.NewForConfig(config)
+	require.NoError(t, err, "create dynamic client")
+	disco := memory.NewMemCacheClient(clientset.Discovery())
+	mapper := restmapper.NewDeferredDiscoveryRESTMapper(disco)
+
 	// Wait for cluster API to be ready and ensure konflux-info exists.
+	nsClient := clientset.CoreV1().Namespaces()
 	for i := 0; i < 60; i++ {
-		createNs := exec.Command("oc", "create", "namespace", "konflux-info")
-		createNs.Env = os.Environ()
-		out, err := createNs.CombinedOutput()
-		outStr := string(out)
-		if err == nil || strings.Contains(outStr, "AlreadyExists") {
+		_, err := nsClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "konflux-info"}}, metav1.CreateOptions{})
+		if err == nil || errors.IsAlreadyExists(err) {
 			break
 		}
 		if i == 59 {
-			require.NoError(t, err, "create namespace konflux-info after wait: %s", outStr)
+			require.NoError(t, err, "create namespace konflux-info after wait")
 		}
 		time.Sleep(time.Second)
 	}
@@ -79,19 +114,66 @@ func applyInputDir(t *testing.T, inputDir string) {
 		if e.IsDir() {
 			continue
 		}
-		if !strings.HasSuffix(strings.ToLower(e.Name()), ".yaml") && !strings.HasSuffix(strings.ToLower(e.Name()), ".yml") {
+		nameLower := strings.ToLower(e.Name())
+		if !strings.HasSuffix(nameLower, ".yaml") && !strings.HasSuffix(nameLower, ".yml") {
 			continue
 		}
 		path := filepath.Join(inputDir, e.Name())
-		// Skip namespace kube-system - it already exists in the cluster; applying would conflict.
 		if strings.Contains(e.Name(), "namespace") && strings.Contains(e.Name(), "kube-system") {
 			continue
 		}
-		cmd := exec.Command("oc", "apply", "-f", path)
-		cmd.Env = os.Environ()
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "oc apply -f %s: %s", path, string(out))
+		data, err := os.ReadFile(path)
+		require.NoError(t, err, "read %s", path)
+		decoder := yaml.NewDecoder(bytes.NewReader(data))
+		for {
+			var doc map[string]interface{}
+			if err := decoder.Decode(&doc); err == io.EOF {
+				break
+			}
+			require.NoError(t, err, "decode YAML doc in %s", path)
+			if len(doc) == 0 {
+				continue
+			}
+			obj := &unstructured.Unstructured{Object: doc}
+			// Strip server-managed fields so Create is accepted (API rejects resourceVersion/uid on create).
+			unstructured.RemoveNestedField(obj.Object, "metadata", "resourceVersion")
+			unstructured.RemoveNestedField(obj.Object, "metadata", "uid")
+			unstructured.RemoveNestedField(obj.Object, "metadata", "creationTimestamp")
+			unstructured.RemoveNestedField(obj.Object, "metadata", "selfLink")
+			gvk := obj.GroupVersionKind()
+			if gvk.Empty() || gvk.Kind == "" {
+				continue
+			}
+			mapping, err := mapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
+			require.NoError(t, err, "rest mapping for %s in %s", gvk, path)
+			gvr := mapping.Resource
+			var ri dynamic.ResourceInterface
+			ns := obj.GetNamespace()
+			if mapping.Scope.Name() == meta.RESTScopeNameNamespace && ns != "" {
+				ri = dynClient.Resource(gvr).Namespace(ns)
+			} else {
+				ri = dynClient.Resource(gvr)
+			}
+			_, err = ri.Create(ctx, obj, metav1.CreateOptions{})
+			if errors.IsAlreadyExists(err) {
+				existing, getErr := ri.Get(ctx, obj.GetName(), metav1.GetOptions{})
+				require.NoError(t, getErr, "get existing resource for replace in %s", path)
+				obj.SetResourceVersion(existing.GetResourceVersion())
+				_, err = ri.Update(ctx, obj, metav1.UpdateOptions{})
+			}
+			require.NoError(t, err, "apply resource from %s", path)
+		}
 	}
+}
+
+// getKubeSystemUID returns the UID of the kube-system namespace via the Go API.
+func getKubeSystemUID(t *testing.T, config *rest.Config) string {
+	t.Helper()
+	clientset, err := kubernetes.NewForConfig(config)
+	require.NoError(t, err, "create kubernetes clientset")
+	ns, err := clientset.CoreV1().Namespaces().Get(context.Background(), "kube-system", metav1.GetOptions{})
+	require.NoError(t, err, "get kube-system namespace")
+	return string(ns.UID)
 }
 
 func TestGetKonfluxPublicInfo(t *testing.T) {
@@ -118,12 +200,8 @@ func TestGetKonfluxPublicInfo(t *testing.T) {
 				require.NoError(t, err, "parse expected env file")
 				require.NotEmpty(t, expected, "expected env file must not be empty")
 
-				// CLUSTER_ID comes from kube-system namespace uid; use cluster value since we don't apply kube-system (it already exists).
-				getUID := exec.Command("oc", "get", "namespace", "kube-system", "-o", "jsonpath={.metadata.uid}")
-				getUID.Env = os.Environ()
-				uidOut, err := getUID.Output()
-				require.NoError(t, err, "get kube-system uid")
-				expected["CLUSTER_ID"] = strings.TrimSpace(string(uidOut))
+				config := buildRestConfig(t)
+				expected["CLUSTER_ID"] = getKubeSystemUID(t, config)
 
 				output := scripts.AssertExecuteScriptWithArgs(t, scriptPath, "env")
 

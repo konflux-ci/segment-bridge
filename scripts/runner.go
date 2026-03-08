@@ -56,3 +56,15 @@ func AssertExecuteScript(t *testing.T, scriptPath string) []byte {
 	assert.NoError(t, err, "failed to run script")
 	return output
 }
+
+// AssertExecuteScriptWithArgs runs the script with the given arguments and returns stdout.
+// It asserts that the command succeeded. Use this for scripts that take arguments (e.g. a wrapper that runs a child command).
+// Behaves like AssertExecuteScript (stdout only); stderr is not captured.
+func AssertExecuteScriptWithArgs(t *testing.T, scriptPath string, args ...string) []byte {
+	t.Helper()
+	cmd := exec.Command(scriptPath, args...)
+	cmd.Env = os.Environ()
+	output, err := cmd.Output()
+	assert.NoError(t, err, "failed to run script with args")
+	return output
+}

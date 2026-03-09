@@ -6,7 +6,10 @@ context:
 event: PipelineRun Started
 messageId: a7e5c48f-9c1d-4739-b0dd-d698670508ef-started
 properties:
+  clusterIdHash: f069097ced1b
   hasPipelineLabel: true
+  konfluxVersion: "1.2.3"
+  kubernetesVersion: "1.30"
   namespaceHash: 01618a158dc1
   pipelineType: test
   taskCount: 1
@@ -23,7 +26,10 @@ messageId: a7e5c48f-9c1d-4739-b0dd-d698670508ef-completed
 properties:
   completionTime: "2026-03-04T07:49:50Z"
   durationSeconds: 23
+  clusterIdHash: f069097ced1b
   hasPipelineLabel: true
+  konfluxVersion: "1.2.3"
+  kubernetesVersion: "1.30"
   namespaceHash: 01618a158dc1
   pipelineType: test
   startTime: "2026-03-04T07:49:27Z"

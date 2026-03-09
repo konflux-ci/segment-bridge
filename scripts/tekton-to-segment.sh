@@ -25,6 +25,12 @@ set -o pipefail -o errexit -o nounset
 # The CronJob/Operator is responsible for setting this value.
 CLUSTER_ID="${CLUSTER_ID:-anonymous}"
 #
+# Optional Konflux public info (e.g. from get-konflux-public-info.sh).
+# When set, clusterIdHash (hash of CLUSTER_ID), konfluxVersion, and kubernetesVersion
+# are added to Segment event properties. When unset, these properties are omitted.
+# KONFLUX_VERSION="${KONFLUX_VERSION:-}"
+# KUBERNETES_VERSION="${KUBERNETES_VERSION:-}"
+#
 # === End of parameters ===
 
 # hash_namespace: Compute SHA256 hash of namespace:cluster_id (first 12 chars)
@@ -38,18 +44,29 @@ hash_namespace() {
   echo -n "${ns}:${CLUSTER_ID}" | sha256sum | cut -c1-12
 }
 
+# hash_cluster_id: Compute SHA256 hash of CLUSTER_ID (first 12 chars).
+# Used to add an anonymized cluster identifier to Segment events when Konflux info is present.
+hash_cluster_id() {
+  echo -n "$CLUSTER_ID" | sha256sum | cut -c1-12
+}
+
 # transform_record: Transform a single PipelineRun JSON into two Segment events
 #   (Started + Completed), both generated retroactively from completed data.
 # Arguments:
 #   $1 - PipelineRun JSON record
 #   $2 - Pre-computed namespace hash
+#   $3 - Pre-computed cluster ID hash (empty when Konflux info not added)
 # Output:
 #   Two Segment event JSON lines to stdout (one per event)
 transform_record() {
   local record="$1"
   local ns_hash="$2"
+  local cluster_id_hash="$3"
 
-  echo "$record" | jq -c --arg ns_hash "$ns_hash" '
+  echo "$record" | jq -c --arg ns_hash "$ns_hash" \
+    --arg cluster_id_hash "$cluster_id_hash" \
+    --arg konflux_version "${KONFLUX_VERSION:-}" \
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
     # Extract completion status from conditions array
     ((.status.conditions // []) | map(select(.type == "Succeeded")) | .[0]) as $cond |
 
@@ -77,13 +94,18 @@ transform_record() {
       }
     } as $base |
 
+    # Optional Konflux public info (only when env vars set)
+    (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
+    (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
+    (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end) as $k8sProp |
+
     # Common properties shared by both events
-    {
+    ({
       namespaceHash: $ns_hash,
       taskCount: $taskCount,
       hasPipelineLabel: (.metadata.labels["tekton.dev/pipeline"] != null),
       pipelineType: .metadata.labels["pipelines.appstudio.openshift.io/type"]
-    } as $commonProps |
+    } + $clusterProp + $konfluxProp + $k8sProp) as $commonProps |
 
     # Event 1: PipelineRun Started
     ($base + {
@@ -108,6 +130,12 @@ transform_record() {
   '
 }
 
+# Precompute cluster ID hash when Konflux info will be added (so we never send raw cluster ID)
+cluster_id_hash=""
+if [[ -n "${CLUSTER_ID:-}" ]]; then
+  cluster_id_hash=$(hash_cluster_id)
+fi
+
 # Process each PipelineRun JSON record from stdin
 # We use a while loop because jq doesn't have native SHA256, so we compute
 # the namespace hash in bash for each record.
@@ -124,5 +152,5 @@ while IFS= read -r record; do
   ns_hash=$(hash_namespace "$ns")
 
   # Transform to Segment events (outputs two lines: Started + Completed)
-  transform_record "$record" "$ns_hash"
+  transform_record "$record" "$ns_hash" "$cluster_id_hash"
 done

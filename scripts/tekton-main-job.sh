@@ -39,4 +39,4 @@ if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
   export CURL_NETRC="$TMPNETRC"
 fi
 
-fetch-tekton-records.sh | tekton-to-segment.sh | segment-mass-uploader.sh
+fetch-tekton-records.sh | get-konflux-public-info.sh tekton-to-segment.sh | segment-mass-uploader.sh

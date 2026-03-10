@@ -61,17 +61,30 @@ func generateFixturePodYaml(templateYaml string) FixtureInfo {
 	return deployment
 }
 
+// imageToContextDir returns the directory name to use as build context from an image name.
+// e.g. "localhost/kwok:latest" -> "kwok", "kwok" -> "kwok".
+func imageToContextDir(imageName string) string {
+	parts := strings.Split(imageName, "/")
+	last := parts[len(parts)-1]
+	if idx := strings.Index(last, ":"); idx >= 0 {
+		return last[:idx]
+	}
+	return last
+}
+
 // Building a container image using the 'podman build' command.
+// Uses the service subdirectory (e.g. kwok/) as the build context so COPY paths in the Dockerfile resolve correctly.
 func buildContainer(t *testing.T, serviceName, service_image_dir string) {
-	cmd := exec.Command("podman", "build", "-t", serviceName, "-f", serviceName+"/Dockerfile")
-	cmd.Dir = service_image_dir
-	stdout, err := cmd.Output()
+	contextDir := filepath.Join(service_image_dir, imageToContextDir(serviceName))
+	cmd := exec.Command("podman", "build", "-t", serviceName, "-f", "Dockerfile", ".")
+	cmd.Dir = contextDir
+	stdout, err := cmd.CombinedOutput()
 	if err == nil {
-		t.Logf("STDOUT: %s", string(stdout))
+		t.Logf("podman build STDOUT: %s", string(stdout))
 		return
 	}
-	t.Errorf("Failed to build image")
-	t.Errorf("STDERR: %s", err.Error())
+	t.Errorf("Failed to build image %q (context: %s)", serviceName, contextDir)
+	t.Errorf("podman build output: %s", string(stdout))
 	t.Fail()
 }
 
@@ -86,13 +99,13 @@ func buildAndRunPod(t *testing.T, manifestTemplate string) FixtureInfo {
 		cmd := exec.Command("podman", "play", "kube", "-")
 		cmd.Stdin = strings.NewReader(deployment.Yaml)
 
-		stdout, err := cmd.Output()
+		output, err := cmd.CombinedOutput()
 		if err == nil {
-			t.Logf("STDOUT: %s", string(stdout))
+			t.Logf("podman play kube STDOUT: %s", string(output))
 			return deployment
 		}
 		t.Logf("Failed to start pod (attempt %d of %d).\n", attempt+1, containerBuildAttempts)
-		t.Logf("STDERR: %s", err.Error())
+		t.Logf("podman play kube output: %s", string(output))
 	}
 	cleanup(t, deployment.PodName)
 	t.Fail()

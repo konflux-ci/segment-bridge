@@ -2,12 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 
 	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -21,7 +19,7 @@ type ExpectedOutput struct {
 	Timestamp  string                 `json:"timestamp"`
 	Namespace  string                 `json:"namespace"`
 	Type       string                 `json:"type"`
-	UserID     int64                  `json:"userId"`
+	UserID     interface{}            `json:"userId"`
 	Event      string                 `json:"event"`
 	Properties map[string]interface{} `json:"properties"`
 	Context    map[string]interface{} `json:"context"`
@@ -35,7 +33,7 @@ func isValidOutput(output []byte) bool {
 	}
 
 	if result.MessageID == "" || result.Timestamp == "" || result.Namespace == "" ||
-		result.Type == "" || result.Event == "" || result.UserID == 0 ||
+		result.Type == "" || result.Event == "" || result.UserID == nil ||
 		result.Properties == nil || len(result.Properties) == 0 ||
 		result.Context == nil || len(result.Context) == 0 {
 		return false
@@ -62,9 +60,6 @@ func runAndValidateScript(t *testing.T, filePath, scriptPath string) bool {
 }
 
 func TestSplunkToSegment(t *testing.T) {
-
-	require.NoError(t, os.Setenv("UID_MAP_FILE", "./sample/getuid"), "Failed to set UID_MAP_FILE")
-	require.NoError(t, os.Setenv("WS_MAP_FILE", "./sample/getworkspace"), "Failed to set WS_MAP_FILE")
 
 	t.Run("PassPath", func(t *testing.T) {
 		assert.True(t, runAndValidateScript(t, filePathSuccess, scriptPath), "Script validation failed for PassPath")

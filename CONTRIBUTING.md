@@ -17,11 +17,6 @@ Kubernetes Without Kubelet. Kwok simply simulates the node's behaviour.
 As a result, it can mimic a high number of nodes and pods while consuming
 only a small amount of memory.
 
-Run the following command for a fresh clone to initialize and update the submodule:
-   ```
-   git submodule update --init
-   ```
-
 To run the Kwok container with the Kwok Kubernetes tool, follow these steps:
 
 1. Build the kwok container using the following command:
@@ -40,26 +35,22 @@ To run the Kwok container with the Kwok Kubernetes tool, follow these steps:
     e815836efc86  kwok-pod        Running     1 minutes ago  8466696a9956  2
     ```
 
-4. Once the Kwok clusters are up and running, set the cluster details in the
+4. Once the Kwok cluster is up and running, set the cluster details in the
    OpenShift client with the following commands:
     ```
-    oc config set-cluster kwok-host --server=http://127.0.0.1:8080
-    oc config set-cluster kwok-m01 --server=http://127.0.0.1:8070
-    oc config set-cluster kwok-rh01 --server=http://127.0.0.1:8060
+    oc config set-cluster kwok --server=http://127.0.0.1:8080
     ```
 
-5. Create new contexts (you only need to set the contexts once) for the Kwok
-   clusters with the following commands:
+5. Create a new context (you only need to set it once) for the Kwok
+   cluster with the following command:
     ```
-    oc config set-context kwok-host --cluster=kwok-host
-    oc config set-context kwok-m01 --cluster=kwok-m01
-    oc config set-context kwok-rh01 --cluster=kwok-rh01
+    oc config set-context kwok --cluster=kwok
     ```
 
 6. Set the Kwok context as the current context, if you've previously switched
    to another cluster, with the following command:
     ```
-    oc config use-context { kwok-host, kwok-m01, kwok-rh01 }
+    oc config use-context kwok
     ```
 
 Now you can access the cluster using kubectl, e.g.: `kubectl get ns`.
@@ -69,7 +60,7 @@ Now you can access the cluster using kubectl, e.g.: `kubectl get ns`.
 > Alternatively, you can also use the kubeconfig file on the repository providing the
 > context and the cluster inline with the command. For example:
 >
-> ```oc --kubeconfig=./kwok/kubeconfig --context=kwok-host get ns```
+> ```oc --kubeconfig=./kwok/kubeconfig --context=kwok get ns```
 
 ### Setting up a containerized Splunk instance
 
@@ -142,9 +133,8 @@ _tests.go and with .go.
 
 #### Running the Unit Tests Locally
 1. Clone your fork of the project.
-2. Initialise [git-submodules](#Running-a-test-environment) before running the unit tests. 
-3. Navigate to the project's root directory
-4. To run all the Go unit tests in the repository,
+2. Navigate to the project's root directory
+3. To run all the Go unit tests in the repository,
 execute the following command `go clean -testcache && go test ./...`
 a similar output is expected:
 
@@ -189,7 +179,6 @@ PR name, or branch name, it will link to the Jira ticket.
 feat(RHTAPWATCH-387): Include the UserAgent field
 
 Include the UserAgent field in all events sent to Segment.
-Also a small fix for `get-workspace-map.sh` to improve local usage.
 
 Signed-off-by: Your Name <your-email@example.com>
 

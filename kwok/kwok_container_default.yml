@@ -13,7 +13,3 @@ spec:
       ports:
         - containerPort: 8080
           hostPort: 8080
-        - containerPort: 8070
-          hostPort: 8070
-        - containerPort: 8060
-          hostPort: 8060

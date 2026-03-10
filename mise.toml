@@ -1,3 +1,10 @@
 [tools]
 go = "1.20.14"
 oc = "stable-4.21"
+python = "3.11"
+
+# Pre-commit and gitlint come from requirements.lock (single source of truth).
+# Uses a project-local .venv so nothing is installed system-wide.
+[tasks.pre-commit]
+description = "Install deps into .venv and run pre-commit on all files"
+run = "python -m venv .venv 2>/dev/null || true; .venv/bin/pip install -q -r requirements.lock && .venv/bin/pre-commit run --all-files"

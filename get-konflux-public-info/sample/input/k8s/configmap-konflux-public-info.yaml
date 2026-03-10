@@ -1,0 +1,56 @@
+apiVersion: v1
+data:
+  info.json: |-
+    {
+        "environment": "development",
+        "visibility": "public",
+        "konfluxVersion": "v0.0.14",
+        "kubernetesVersion": "v1.33.1",
+        "rbac": [
+            {
+                "displayName": "admin",
+                "description": "Full access to Konflux resources including secrets",
+                "roleRef": {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "ClusterRole",
+                    "name": "konflux-admin-user-actions"
+                }
+            },
+            {
+                "displayName": "maintainer",
+                "description": "Partial access to Konflux resources without access to secrets",
+                "roleRef": {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "ClusterRole",
+                    "name": "konflux-maintainer-user-actions"
+                }
+            },
+            {
+                "displayName": "contributor",
+                "description": "View access to Konflux resources without access to secrets",
+                "roleRef": {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "ClusterRole",
+                    "name": "konflux-contributor-user-actions"
+                }
+            }
+        ]
+    }
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2026-02-17T14:42:19Z"
+  labels:
+    konflux.konflux-ci.dev/component: info
+    konflux.konflux-ci.dev/owner: konflux-info
+  name: konflux-public-info
+  namespace: konflux-info
+  ownerReferences:
+  - apiVersion: konflux.konflux-ci.dev/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: KonfluxInfo
+    name: konflux-info
+    uid: 51343eb9-dea5-488b-808a-2db8d13d4045
+  resourceVersion: "9686178"
+  uid: 154ff195-7bd1-4296-9424-211b8de352b7
+

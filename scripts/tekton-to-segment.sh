@@ -50,6 +50,80 @@ hash_cluster_id() {
   echo -n "$CLUSTER_ID" | sha256sum | cut -c1-12
 }
 
+# transform_konflux_record: Transform a single Konflux CR JSON into two Segment events
+#   (Operator Deployment Started + Completed).
+# Arguments:
+#   $1 - Konflux CR JSON record
+#   $2 - Pre-computed namespace hash
+#   $3 - Pre-computed cluster ID hash (empty when Konflux info not added)
+# Output:
+#   Two Segment event JSON lines to stdout (one per event)
+transform_konflux_record() {
+  local record="$1"
+  local ns_hash="$2"
+  local cluster_id_hash="$3"
+
+  echo "$record" | jq -c --arg ns_hash "$ns_hash" \
+    --arg cluster_id_hash "$cluster_id_hash" \
+    --arg konflux_version "${KONFLUX_VERSION:-}" \
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
+    # Ready condition (type=="Ready", status=="True")
+    ((.status.conditions // []) | map(select(.type == "Ready" and .status == "True")) | .[0]) as $ready |
+
+    (.metadata.creationTimestamp) as $startTime |
+    ($ready.lastTransitionTime) as $completionTime |
+
+    # Duration in seconds (null if timestamps missing)
+    (
+      if $startTime and $completionTime then
+        (($completionTime | fromdateiso8601) - ($startTime | fromdateiso8601))
+      else
+        null
+      end
+    ) as $duration |
+
+    {
+      type: "track",
+      anonymousId: "anonymous",
+      context: {
+        library: {
+          name: "segment-bridge",
+          version: "2.0.0"
+        }
+      }
+    } as $base |
+
+    (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
+    (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
+    (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end) as $k8sProp |
+
+    ({
+      namespaceHash: $ns_hash
+    } + $clusterProp + $konfluxProp + $k8sProp) as $commonProps |
+
+    # Event 1: Operator Deployment Started
+    ($base + {
+      messageId: (.metadata.uid + "-started"),
+      timestamp: $startTime,
+      event: "Operator Deployment Started",
+      properties: $commonProps
+    }),
+
+    # Event 2: Operator Deployment Completed
+    ($base + {
+      messageId: (.metadata.uid + "-completed"),
+      timestamp: $completionTime,
+      event: "Operator Deployment Completed",
+      properties: ($commonProps + {
+        startTime: $startTime,
+        completionTime: $completionTime,
+        durationSeconds: $duration,
+        status: ($ready.reason // "Unknown")
+      })
+    })
+  '
+}
+
 # transform_record: Transform a single PipelineRun JSON into two Segment events
 #   (Started + Completed), both generated retroactively from completed data.
 # Arguments:
@@ -143,8 +217,14 @@ while IFS= read -r record; do
   # Skip empty lines
   [[ -z "$record" ]] && continue
 
-  # Process only PipelineRun resources
+  # Process only PipelineRun and Konflux resources
   kind=$(echo "$record" | jq -r '.kind // ""')
+  if [[ "$kind" == "Konflux" ]]; then
+    ns=$(echo "$record" | jq -r '.metadata.namespace // "unknown"')
+    ns_hash=$(hash_namespace "$ns")
+    transform_konflux_record "$record" "$ns_hash" "$cluster_id_hash"
+    continue
+  fi
   [[ "$kind" != "PipelineRun" ]] && continue
 
   # Extract namespace and compute SHA256 hash

@@ -1,0 +1,65 @@
+---
+description: General workflow, commit, and plan conventions (from user preferences)
+alwaysApply: true
+---
+
+# General workflow and conventions
+
+## Plans and to-dos
+
+- Add **detailed to-dos** to plans so process details are clear; include to-dos for **checkpoints** as well.
+- When implementing an attached plan: **do not edit the plan file**. To-dos are already created—do not create them again. Mark tasks as `in_progress` as you work and complete all to-dos before stopping.
+- Do not imply that external environments (e.g. Kind, services) must be launched by the plan; assume the user already has the system up when they say so.
+
+## Checkpoints
+
+- When something (script, test, etc.) is ready and tested, **stop**, show test results, and let the user run tests and give feedback before moving on.
+- **Checkpoints happen before committing.** If the user gives feedback after a commit, amend that commit with the fixes.
+- When doing TDD, add a **checkpoint after the failing-tests phase** as well (before implementing the fix).
+
+## Commits and branch
+
+- Use a branch name that includes the JIRA/ticket id and a short descriptive name.
+- One **conventional commit** per task, consistent with existing repo style (e.g. `feat(KFLUXVNGD-785): ...`).
+
+### Gitlint: pass on first try
+
+The repo enforces gitlint (see `.gitlint`). Satisfy these so commits pass without fix-up:
+
+- **Title (first line):**
+  - **Conventional format:** `type(scope): description` — type must be one of: fix, feat, chore, docs, style, refactor, perf, test, revert, ci, build (e.g. `feat(KFLUXVNGD-785): add fetch script`).
+  - **Length:** title line ≤72 characters.
+- **Body (after title):**
+  - **First line empty:** blank line immediately after the title.
+  - **Line length:** every body line ≤72 characters (wrap long lines).
+  - **Signed-off-by:** body must contain a line starting with `Signed-off-by: Full Name <email>` (e.g. `Signed-off-by: Barak Korren <bkorren@redhat.com>`).
+
+Example:
+
+```
+feat(KFLUXVNGD-785): add fetch-konflux-op-records script
+
+Add script to fetch Konflux operator CR from the cluster, with kwok tests.
+
+Signed-off-by: Your Name <your-email@example.com>
+```
+
+## Do not commit
+
+- Do **not** commit changes to **`.vscode/settings.json`**; those are generated automatically by the VS Code mise plugin.
+
+## Testing
+
+- For new scripts similar to existing ones, mirror the same test approach (e.g. kwok-based tests). Use TDD: manual run on the real cluster once; automated tests on kwok.
+- Prefer **real or sample input files** from the repo in tests instead of inventing minimal fixtures; export CRDs or data from a live cluster when needed.
+
+## PR and lint
+
+- Run **gitlint** and **yamllint** (and any other project lint checks) locally before pushing. Fix issues and re-push. Prefer **amending existing PR commits** over adding new commits where it makes sense.
+
+### Yamllint: avoiding failures
+
+- The project uses **yamllint** (default rules + `.yamllint.yaml`). Sample/fixture dirs are **ignored** so CI doesn’t fail on long lines or non-standard YAML in test data.
+- **If you add a new sample or fixture directory** that contains YAML (e.g. CRDs, CRs) with long lines or non-standard formatting, **add it to the `ignore` list in `.yamllint.yaml`** so yamllint skips it. Existing entries: `.tekton/`, `tekton-to-segment/sample/`, `get-konflux-public-info/sample/`. Add entries in the same form (e.g. `fetch-konflux-op-records/sample/`).
+- Fixing yamllint by excluding the new dir is preferred over reformatting fixture YAML, so test data stays realistic.
+

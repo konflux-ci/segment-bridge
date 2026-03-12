@@ -20,8 +20,11 @@ else
 	exit 1
 fi
 
+# Capture exit code without triggering errexit: assignment from failing command exits before RET is set.
+set +e
 OUTPUT="$("$KUBECTL" get konflux konflux -o json 2>&1)"
 RET=$?
+set -e
 if [[ $RET -ne 0 ]]; then
 	if echo "$OUTPUT" | grep -q "Error from server (NotFound)"; then
 		echo "ERROR: Konflux resource 'konflux' not found" >&2

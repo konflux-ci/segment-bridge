@@ -136,7 +136,6 @@ func buildPipelineRunJSON(t *testing.T, pr pipelineRunData) string {
 	return string(data)
 }
 
-// buildTknResultsResponse matches the format of `tkn-results records list -o json`
 func buildTknResultsResponse(t *testing.T, pipelineRuns []string, taskRuns []string) string {
 	t.Helper()
 	var records []tknRecord
@@ -203,8 +202,6 @@ esac
 	require.NoError(t, os.WriteFile(mockOC, []byte(ocScript), 0755))
 }
 
-// computeNamespaceHash replicates the SHA256(namespace:cluster_id) logic
-// from tekton-to-segment.sh
 func computeNamespaceHash(namespace, clusterID string) string {
 	h := sha256.Sum256([]byte(namespace + ":" + clusterID))
 	return fmt.Sprintf("%x", h)[:12]

@@ -1,5 +1,6 @@
 [tools]
 go = "1.20.14"
+kind = "0.29.0"
 oc = "stable-4.21"
 python = "3.11"
 

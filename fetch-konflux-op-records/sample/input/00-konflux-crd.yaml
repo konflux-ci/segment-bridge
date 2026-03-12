@@ -1,0 +1,30 @@
+# Minimal Konflux CRD for kwok-based tests.
+# Export from live cluster with: kubectl get crd konfluxes.konflux.konflux-ci.dev -o yaml
+# This minimal version allows the Konflux CR to be applied in kwok.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: konfluxes.konflux.konflux-ci.dev
+spec:
+  group: konflux.konflux-ci.dev
+  scope: Cluster
+  names:
+    plural: konfluxes
+    singular: konflux
+    kind: Konflux
+    listKind: KonfluxList
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+          properties:
+            spec:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true

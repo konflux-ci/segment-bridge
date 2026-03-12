@@ -1,0 +1,33 @@
+anonymousId: anonymous
+context:
+  library:
+    name: segment-bridge
+    version: 2.0.0
+event: Operator Deployment Started
+messageId: 8208a728-391e-47da-a461-26e9e6f48ada-started
+properties:
+  clusterIdHash: f069097ced1b
+  konfluxVersion: "1.2.3"
+  kubernetesVersion: "1.30"
+  namespaceHash: 44c3473d88ad
+timestamp: "2026-02-17T14:42:19Z"
+type: track
+---
+anonymousId: anonymous
+context:
+  library:
+    name: segment-bridge
+    version: 2.0.0
+event: Operator Deployment Completed
+messageId: 8208a728-391e-47da-a461-26e9e6f48ada-completed
+properties:
+  clusterIdHash: f069097ced1b
+  completionTime: "2026-03-03T08:43:48Z"
+  durationSeconds: 1188089
+  konfluxVersion: "1.2.3"
+  kubernetesVersion: "1.30"
+  namespaceHash: 44c3473d88ad
+  startTime: "2026-02-17T14:42:19Z"
+  status: AllComponentsReady
+timestamp: "2026-03-03T08:43:48Z"
+type: track

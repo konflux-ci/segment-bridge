@@ -7,3 +7,4 @@ ignore:
   - .tekton/
   - tekton-to-segment/sample/
   - get-konflux-public-info/sample/
+  - fetch-konflux-op-records/sample/

@@ -1,12 +1,12 @@
 module github.com/redhat-appstudio/segment-bridge.git
 
-go 1.20
+go 1.25.0
 
 require (
 	github.com/lithammer/dedent v1.1.0
 	github.com/sergi/go-diff v1.3.1
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/exp v0.0.0-20230725093048-515e97ebf090
+	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.28.4
 	k8s.io/apimachinery v0.28.4
@@ -23,7 +23,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect

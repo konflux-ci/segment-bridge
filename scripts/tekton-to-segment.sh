@@ -7,8 +7,12 @@
 #     1. "PipelineRun Started"   - timestamped at status.startTime
 #     2. "PipelineRun Completed" - timestamped at status.completionTime
 #
+#   For each Namespace (Konflux tenant namespaces from fetch-namespace-records.sh),
+#   one event is emitted:
+#     "Namespace Created" - timestamped at metadata.creationTimestamp
+#
 #   This script is part of the Tekton Results bridge pipeline:
-#   fetch-tekton-records.sh | tekton-to-segment.sh | segment-mass-uploader.sh
+#   ... | tekton-to-segment.sh | segment-mass-uploader.sh
 #
 #   Privacy: Namespace names are hashed with SHA256(namespace:cluster_id) to prevent
 #   identification while still allowing correlation within a cluster.
@@ -211,6 +215,48 @@ transform_record() {
   '
 }
 
+# transform_namespace_record: Transform a single Namespace JSON into one Segment event
+#   (Namespace Created). Timestamp is metadata.creationTimestamp.
+# Arguments:
+#   $1 - Namespace JSON record
+#   $2 - Pre-computed namespace hash (from metadata.name + CLUSTER_ID)
+#   $3 - Pre-computed cluster ID hash (empty when Konflux info not added)
+# Output:
+#   One Segment event JSON line to stdout
+transform_namespace_record() {
+  local record="$1"
+  local ns_hash="$2"
+  local cluster_id_hash="$3"
+
+  echo "$record" | jq -c --arg ns_hash "$ns_hash" \
+    --arg cluster_id_hash "$cluster_id_hash" \
+    --arg konflux_version "${KONFLUX_VERSION:-}" \
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
+    {
+      type: "track",
+      anonymousId: "anonymous",
+      context: {
+        library: {
+          name: "segment-bridge",
+          version: "2.0.0"
+        }
+      }
+    } as $base |
+    (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
+    (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
+    (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end) as $k8sProp |
+    ({
+      namespaceHash: $ns_hash
+    } + $clusterProp + $konfluxProp + $k8sProp) as $props |
+    $base + {
+      messageId: (.metadata.uid + "-namespace-created"),
+      timestamp: .metadata.creationTimestamp,
+      event: "Namespace Created",
+      properties: $props
+    }
+  '
+}
+
 # Precompute cluster ID hash when Konflux info will be added (so we never send raw cluster ID)
 cluster_id_hash=""
 if [[ -n "${CLUSTER_ID:-}" ]]; then
@@ -230,6 +276,13 @@ while IFS= read -r record; do
     ns=$(echo "$record" | jq -r '.metadata.namespace // "unknown"')
     ns_hash=$(hash_namespace "$ns")
     transform_konflux_record "$record" "$ns_hash" "$cluster_id_hash"
+    continue
+  fi
+  if [[ "$kind" == "Namespace" ]]; then
+    # Hash by namespace name (same as PipelineRun namespace hashing)
+    ns=$(echo "$record" | jq -r '.metadata.name // "unknown"')
+    ns_hash=$(hash_namespace "$ns")
+    transform_namespace_record "$record" "$ns_hash" "$cluster_id_hash"
     continue
   fi
   [[ "$kind" != "PipelineRun" ]] && continue

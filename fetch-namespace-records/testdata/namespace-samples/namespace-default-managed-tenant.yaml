@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"labels":{"konflux-ci.dev/type":"tenant"},"name":"default-managed-tenant"}}
+  creationTimestamp: "2026-03-04T07:30:50Z"
+  labels:
+    konflux-ci.dev/type: tenant
+    kubernetes.io/metadata.name: default-managed-tenant
+  name: default-managed-tenant
+  resourceVersion: "10376467"
+  uid: 5a9dedd8-844e-4cd6-9704-738cbbe18d89
+spec:
+  finalizers:
+  - kubernetes
+status:
+  phase: Active

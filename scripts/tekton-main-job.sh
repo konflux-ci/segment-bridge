@@ -10,6 +10,7 @@
 #   Pipeline flow:
 #     fetch-tekton-records.sh   - Query Tekton Results API for PipelineRuns
 #     fetch-konflux-op-records.sh - Fetch cluster Konflux CR (operator)
+#     fetch-namespace-records.sh - List Konflux tenant namespaces (labeled)
 #     (both outputs concatenated) → get-konflux-public-info.sh → tekton-to-segment.sh
 #     segment-mass-uploader.sh  - Batch and upload to Segment API
 #
@@ -41,4 +42,4 @@ if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
 fi
 
 # get-konflux-public-info.sh is best-effort: missing configmap/namespace does not abort the pipeline.
-{ fetch-tekton-records.sh; fetch-konflux-op-records.sh; } | get-konflux-public-info.sh tekton-to-segment.sh | segment-mass-uploader.sh
+{ fetch-tekton-records.sh; fetch-konflux-op-records.sh; fetch-namespace-records.sh; } | get-konflux-public-info.sh tekton-to-segment.sh | segment-mass-uploader.sh

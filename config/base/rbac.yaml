@@ -29,6 +29,14 @@ rules:
     verbs:
       - get
       - list
+  # fetch-konflux-op-records.sh: cluster-scoped Konflux CR "konflux"
+  - apiGroups:
+      - konflux.konflux-ci.dev
+    resources:
+      - konfluxes
+    verbs:
+      - get
+      - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

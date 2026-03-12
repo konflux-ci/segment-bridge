@@ -7,6 +7,10 @@
 # Build:
 #   podman build -t segment-bridge .
 #
+# For local builds (without CI), run ./scripts/prepare-oc-client-for-build.sh then
+# build with the deps dir mounted where Konflux mounts the prefetch output:
+#   podman build -v "$(pwd)/deps:/cachi2/output/deps:Z" -t segment-bridge .
+#
 # Usage:
 #   podman run --rm \
 #     -e TEKTON_RESULTS_API_ADDR=tekton-results-api-service:8080 \
@@ -25,7 +29,18 @@ ENV GOARCH=amd64
 RUN go install github.com/tektoncd/results/cmd/tkn-results@v0.14.0 && \
     cp "$(go env GOPATH)/bin/tkn-results" /build/tkn-results
 
-# Second stage: Create the final container image
+# Second stage: Extract OpenShift client (oc + kubectl) from prefetched tarball.
+# Konflux mounts the Hermeto prefetch output at /cachi2; the tarball is not in the
+# build context, so we must use RUN to read from the mounted path (not COPY).
+# Only the extracted binaries are copied to the final image.
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS oc-client
+RUN microdnf install -y --nodocs tar gzip && microdnf clean all && rm -rf /var/cache/yum
+RUN cp /cachi2/output/deps/generic/openshift-client-linux-amd64-rhel9.tar.gz /tmp/oc.tar.gz && \
+    tar -xzf /tmp/oc.tar.gz -C /tmp && \
+    mv /tmp/oc /tmp/kubectl /usr/local/bin/ && \
+    rm /tmp/oc.tar.gz
+
+# Third stage: Create the final container image
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 LABEL \
@@ -39,8 +54,12 @@ PipelineRun execution metrics from Tekton Results API and sending them to Segmen
 RUN microdnf install -y --nodocs \
         jq \
         bash \
+        curl-minimal \
     && microdnf clean all \
     && rm -rf /var/cache/yum
+
+# OpenShift client binaries (from prefetched tarball, extracted in oc-client stage)
+COPY --from=oc-client /usr/local/bin/oc /usr/local/bin/kubectl /usr/local/bin/
 
 # Copy the tkn-results binary from the builder stage
 COPY --from=builder --chown=root:root --chmod=755 /build/tkn-results /usr/local/bin/tkn-results

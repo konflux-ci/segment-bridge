@@ -21,7 +21,7 @@ TEKTON_RESULTS_API_ADDR="${TEKTON_RESULTS_API_ADDR:-localhost:50051}"
 TEKTON_RESULTS_TOKEN="${TEKTON_RESULTS_TOKEN:-}"
 #
 # Kubernetes namespace to fetch PipelineRuns from
-TEKTON_NAMESPACE="${TEKTON_NAMESPACE:-}"
+TEKTON_NAMESPACE="${TEKTON_NAMESPACE:--}"
 #
 # Maximum number of records to fetch
 TEKTON_LIMIT="${TEKTON_LIMIT:-100}"
@@ -55,13 +55,6 @@ get_token() {
   echo "  export TEKTON_RESULTS_TOKEN=\$(kubectl create token default -n default)" >&2
   return 1
 }
-
-# Validate required parameters
-if [[ -z "$TEKTON_NAMESPACE" ]]; then
-  echo "ERROR: TEKTON_NAMESPACE is required" >&2
-  echo "Usage: TEKTON_NAMESPACE=<namespace> $0" >&2
-  exit 1
-fi
 
 # Get authentication token
 TOKEN=$(get_token) || exit 1

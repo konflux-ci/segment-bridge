@@ -21,6 +21,14 @@ rules:
     verbs:
       - get
       - list
+  - apiGroups:
+      - results.tekton.dev
+    resources:
+      - results
+      - records
+    verbs:
+      - get
+      - list
   # fetch-konflux-op-records.sh: cluster-scoped Konflux CR "konflux"
   - apiGroups:
       - konflux.konflux-ci.dev

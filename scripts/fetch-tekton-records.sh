@@ -20,7 +20,9 @@ TEKTON_RESULTS_API_ADDR="${TEKTON_RESULTS_API_ADDR:-localhost:50051}"
 # If not set, will attempt to read from K8s service account token
 TEKTON_RESULTS_TOKEN="${TEKTON_RESULTS_TOKEN:-}"
 #
-# Kubernetes namespace to fetch PipelineRuns from
+# Kubernetes namespace to fetch PipelineRuns from.
+# Use "-" (the Tekton Results API wildcard) to query across all namespaces.
+# Defaults to "-" (all namespaces) when unset.
 TEKTON_NAMESPACE="${TEKTON_NAMESPACE:--}"
 #
 # Maximum number of records to fetch

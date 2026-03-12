@@ -17,6 +17,7 @@ func TestLookPath(t *testing.T) {
 		{"no-such-file", true},
 		{"fetch-uj-records.sh", false},
 		{"fetch-konflux-op-records.sh", false},
+		{"fetch-namespace-records.sh", false},
 		{"get-konflux-public-info.sh", false},
 		{"splunk-to-segment.sh", false},
 		{"segment-mass-uploader.sh", false},

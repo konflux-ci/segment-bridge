@@ -48,6 +48,7 @@ COPY --from=builder --chown=root:root --chmod=755 /build/tkn-results /usr/local/
 COPY --chown=root:root --chmod=755 \
     scripts/fetch-tekton-records.sh \
     scripts/fetch-konflux-op-records.sh \
+    scripts/fetch-namespace-records.sh \
     scripts/tekton-to-segment.sh \
     scripts/segment-uploader.sh \
     scripts/segment-mass-uploader.sh \

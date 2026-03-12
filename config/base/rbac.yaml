@@ -6,6 +6,7 @@ metadata:
     app.kubernetes.io/name: segment-bridge
   name: segment-bridge
 rules:
+  # get-konflux-public-info.sh: read kube-system namespace (e.g. for CLUSTER_ID)
   - apiGroups:
       - ""
     resourceNames:
@@ -14,6 +15,13 @@ rules:
       - namespaces
     verbs:
       - get
+  # fetch-namespace-records.sh: list ns by label konflux-ci.dev/type=tenant
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - list
   - apiGroups:
       - config.openshift.io
     resources:

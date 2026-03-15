@@ -29,6 +29,7 @@ rules:
     verbs:
       - get
       - list
+  # get-konflux-public-info.sh: needs get on configmap/konflux-public-info in namespace konflux-info (granted by Konflux operator).
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

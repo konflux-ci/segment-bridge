@@ -19,3 +19,6 @@
 
 # Project-local Python venv (pre-commit, etc.)
 .venv/
+
+# Prefetched deps for local build (CI uses Hermeto; see scripts/prepare-oc-client-for-build.sh)
+deps/

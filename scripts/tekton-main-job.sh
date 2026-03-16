@@ -40,4 +40,5 @@ if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
   export CURL_NETRC="$TMPNETRC"
 fi
 
+# get-konflux-public-info.sh is best-effort: missing configmap/namespace does not abort the pipeline.
 { fetch-tekton-records.sh; fetch-konflux-op-records.sh; } | get-konflux-public-info.sh tekton-to-segment.sh | segment-mass-uploader.sh

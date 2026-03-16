@@ -166,6 +166,18 @@ func applyInputDir(t *testing.T, inputDir string) {
 	}
 }
 
+// deleteKonfluxPublicInfoConfigMap removes the konflux-public-info ConfigMap so the script cannot read it.
+func deleteKonfluxPublicInfoConfigMap(t *testing.T, config *rest.Config) {
+	t.Helper()
+	ctx := context.Background()
+	clientset, err := kubernetes.NewForConfig(config)
+	require.NoError(t, err, "create kubernetes clientset")
+	err = clientset.CoreV1().ConfigMaps("konflux-info").Delete(ctx, "konflux-public-info", metav1.DeleteOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		require.NoError(t, err, "delete konflux-public-info configmap")
+	}
+}
+
 // getKubeSystemUID returns the UID of the kube-system namespace via the Go API.
 func getKubeSystemUID(t *testing.T, config *rest.Config) string {
 	t.Helper()
@@ -181,11 +193,18 @@ func TestGetKonfluxPublicInfo(t *testing.T) {
 		name            string
 		inputDir        string
 		expectedEnvFile string
+		missingKonflux  bool // if true, script runs without konflux-public-info; assert no KONFLUX_* vars
 	}{
 		{
 			name:            "k8s-konflux-public-info",
 			inputDir:        "sample/input/k8s",
 			expectedEnvFile: "sample/expected/k8s-konflux-public-info.env",
+		},
+		{
+			name:            "missing-konflux-public-info",
+			inputDir:        "sample/input/empty",
+			expectedEnvFile: "",
+			missingKonflux:  true,
 		},
 	}
 
@@ -195,6 +214,28 @@ func TestGetKonfluxPublicInfo(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				applyInputDir(t, tc.inputDir)
+				if tc.missingKonflux {
+					config := buildRestConfig(t)
+					deleteKonfluxPublicInfoConfigMap(t, config)
+				}
+
+				output := scripts.AssertExecuteScriptWithArgs(t, scriptPath, "env")
+
+				actual, err := parseEnv(string(output))
+				require.NoError(t, err)
+
+				if tc.missingKonflux {
+					// Script must succeed; KONFLUX_VERSION and KUBERNETES_VERSION must be unset or empty.
+					_, hasKonflux := actual["KONFLUX_VERSION"]
+					_, hasK8s := actual["KUBERNETES_VERSION"]
+					assert.False(t, hasKonflux && actual["KONFLUX_VERSION"] != "", "KONFLUX_VERSION should be unset or empty")
+					assert.False(t, hasK8s && actual["KUBERNETES_VERSION"] != "", "KUBERNETES_VERSION should be unset or empty")
+					// CLUSTER_ID should be set from kube-system.
+					config := buildRestConfig(t)
+					expectedCLUSTER_ID := getKubeSystemUID(t, config)
+					assert.Equal(t, expectedCLUSTER_ID, actual["CLUSTER_ID"], "CLUSTER_ID from kube-system")
+					return
+				}
 
 				expected, err := parseExpectedEnv(tc.expectedEnvFile)
 				require.NoError(t, err, "parse expected env file")
@@ -202,11 +243,6 @@ func TestGetKonfluxPublicInfo(t *testing.T) {
 
 				config := buildRestConfig(t)
 				expected["CLUSTER_ID"] = getKubeSystemUID(t, config)
-
-				output := scripts.AssertExecuteScriptWithArgs(t, scriptPath, "env")
-
-				actual, err := parseEnv(string(output))
-				require.NoError(t, err)
 
 				for k, want := range expected {
 					got, ok := actual[k]

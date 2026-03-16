@@ -190,10 +190,11 @@ func getKubeSystemUID(t *testing.T, config *rest.Config) string {
 
 func TestGetKonfluxPublicInfo(t *testing.T) {
 	testCases := []struct {
-		name            string
-		inputDir        string
-		expectedEnvFile string
-		missingKonflux  bool // if true, script runs without konflux-public-info; assert no KONFLUX_* vars
+		name                     string
+		inputDir                 string
+		expectedEnvFile          string
+		missingKonflux           bool // if true, assert no KONFLUX_* vars and CLUSTER_ID from kube-system
+		deleteConfigMapBeforeRun bool // if true, remove configmap before running script (for "missing" case)
 	}{
 		{
 			name:            "k8s-konflux-public-info",
@@ -201,10 +202,18 @@ func TestGetKonfluxPublicInfo(t *testing.T) {
 			expectedEnvFile: "sample/expected/k8s-konflux-public-info.env",
 		},
 		{
-			name:            "missing-konflux-public-info",
-			inputDir:        "sample/input/empty",
-			expectedEnvFile: "",
-			missingKonflux:  true,
+			name:                     "missing-konflux-public-info",
+			inputDir:                 "sample/input/empty",
+			expectedEnvFile:          "",
+			missingKonflux:           true,
+			deleteConfigMapBeforeRun: true,
+		},
+		{
+			name:                     "malformed-info-json",
+			inputDir:                 "sample/input/malformed",
+			expectedEnvFile:          "",
+			missingKonflux:           true,
+			deleteConfigMapBeforeRun: false,
 		},
 	}
 
@@ -214,7 +223,7 @@ func TestGetKonfluxPublicInfo(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				applyInputDir(t, tc.inputDir)
-				if tc.missingKonflux {
+				if tc.deleteConfigMapBeforeRun {
 					config := buildRestConfig(t)
 					deleteKonfluxPublicInfoConfigMap(t, config)
 				}

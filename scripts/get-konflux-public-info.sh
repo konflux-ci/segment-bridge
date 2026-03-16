@@ -44,8 +44,9 @@ if [[ $_ret -eq 0 && -n "${INFO_JSON:-}" ]]; then
 	set +e
 	KONFLUX_VERSION="$(printf '%s' "$INFO_JSON" | jq -r '.konfluxVersion' 2>/dev/null)"
 	_jq_ret=$?
-	KUBERNETES_VERSION="$(printf '%s' "$INFO_JSON" | jq -r '.kubernetesVersion' 2>/dev/null)"
-	[[ $? -ne 0 ]] && _jq_ret=1
+	if ! KUBERNETES_VERSION="$(printf '%s' "$INFO_JSON" | jq -r '.kubernetesVersion' 2>/dev/null)"; then
+		_jq_ret=1
+	fi
 	set -e
 	if [[ $_jq_ret -eq 0 ]]; then
 		export KONFLUX_VERSION KUBERNETES_VERSION

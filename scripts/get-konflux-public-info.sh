@@ -24,6 +24,7 @@ fi
 CLUSTER_ID="$($KUBECTL get namespace kube-system -o jsonpath='{.metadata.uid}')"
 export CLUSTER_ID
 
+# RBAC: get on configmap/konflux-public-info in namespace konflux-info (granted by Konflux operator).
 INFO_JSON="$($KUBECTL get configmap konflux-public-info -n konflux-info -o json | jq -r '.data["info.json"]')"
 KONFLUX_VERSION="$(printf '%s' "$INFO_JSON" | jq -r '.konfluxVersion')"
 KUBERNETES_VERSION="$(printf '%s' "$INFO_JSON" | jq -r '.kubernetesVersion')"

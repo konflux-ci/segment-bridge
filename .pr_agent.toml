@@ -1,0 +1,23 @@
+[pr_code_suggestions]
+extra_instructions = """\
+Context: this pipeline is intentionally stateless and will re-emit events across CronJob runs.
+We *intentionally rely on Segment's messageId-based deduplication* and accept limited re-emits to improve resilience to transient upload/network failures.
+
+Therefore:
+- Do NOT suggest adding persisted checkpoints/watermarks/ConfigMaps solely to prevent duplicate emissions.
+- Do NOT flag "duplicate events across runs" as a bug unless it causes correctness or cost issues beyond our accepted retry window.
+- If commenting on this area, focus on making messageId deterministic and stable, and on safe retry behavior (idempotency, bounded retries, clear logging/metrics).
+
+When reviewing Go code, verify behavior claims against official docs before calling something a correctness bug.
+In particular, for os/exec.Cmd.Env: duplicate env keys are allowed and the last occurrence is used by the child process.
+So appending overrides after os.Environ() is a valid override mechanism; do not suggest rebuilding env via a map unless there is a demonstrated functional issue (e.g., platform-specific behavior, non-os/exec consumer, or test evidence).
+Prefer suggesting changes only when they materially change runtime behavior, not just "clean up duplicates".
+"""
+
+[pr_reviewer]
+extra_instructions = """\
+- When reviewing Go code, verify behavior claims against official docs before calling something a correctness bug.
+- In particular, for os/exec.Cmd.Env: duplicate env keys are allowed and the last occurrence is used by the child process.
+  So appending overrides after os.Environ() is a valid override mechanism; do not suggest rebuilding env via a map unless there is a demonstrated functional issue (e.g., platform-specific behavior, non-os/exec consumer, or test evidence).
+- Prefer suggesting changes only when they materially change runtime behavior, not just "clean up duplicates".
+"""

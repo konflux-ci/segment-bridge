@@ -28,6 +28,8 @@ CLUSTER_ID="${CLUSTER_ID:-anonymous}"
 # Optional Konflux public info (e.g. from get-konflux-public-info.sh).
 # When set, clusterIdHash (hash of CLUSTER_ID), konfluxVersion, and kubernetesVersion
 # are added to Segment event properties. When unset, these properties are omitted.
+# get-konflux-public-info.sh may leave them unset when the configmap/namespace is
+# missing or not accessible.
 # KONFLUX_VERSION="${KONFLUX_VERSION:-}"
 # KUBERNETES_VERSION="${KUBERNETES_VERSION:-}"
 #

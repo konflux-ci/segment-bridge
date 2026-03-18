@@ -19,6 +19,10 @@
 #     passed to the upload scripts via CURL_NETRC. This keeps auth concerns
 #     in the orchestration layer rather than in individual scripts.
 #
+#   When SEGMENT_WRITE_KEY is not set the fetch and transform stages still
+#   run (useful for debugging) but segment_sink drains the output instead of
+#   uploading, so the job exits 0 instead of crashing.
+#
 set -o pipefail -o errexit -o nounset -o xtrace
 
 # Add script file directory to PATH so we can use other scripts in the same
@@ -39,7 +43,12 @@ if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
   printf 'machine %s login %s password ""\n' "$SEGMENT_HOST" "$SEGMENT_WRITE_KEY" > "$TMPNETRC"
   chmod 600 "$TMPNETRC"
   export CURL_NETRC="$TMPNETRC"
+  segment_sink() { segment-mass-uploader.sh; }
+else
+  echo "No SEGMENT_WRITE_KEY configured; skipping upload to Segment" >&2
+  segment_sink() { cat > /dev/null; }
 fi
 
-# get-konflux-public-info.sh is best-effort: missing configmap/namespace does not abort the pipeline.
-{ fetch-tekton-records.sh; fetch-konflux-op-records.sh; fetch-namespace-records.sh; } | get-konflux-public-info.sh tekton-to-segment.sh | segment-mass-uploader.sh
+{ fetch-tekton-records.sh; fetch-konflux-op-records.sh; fetch-namespace-records.sh; } \
+  | get-konflux-public-info.sh tekton-to-segment.sh \
+  | segment_sink

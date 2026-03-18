@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+bin/
 
 # Test binary, built with `go test -c`
 *.test
@@ -14,6 +15,13 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+.pytest_cache/
+
 # Links created by the mise plugin
 .vscode/mise-tools/
 
@@ -22,3 +30,6 @@
 
 # Prefetched deps for local build (CI uses Hermeto; see scripts/prepare-oc-client-for-build.sh)
 deps/
+
+# IDE / editor
+.cursor/plans/

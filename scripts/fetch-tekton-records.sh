@@ -61,12 +61,12 @@ get_token() {
 # Get authentication token
 TOKEN=$(get_token) || exit 1
 
-# Build tkn-results command
+# Build tkn-results command (flags only — positional arg added at invocation
+# with a -- separator so "-/results/-" is never parsed as a flag)
 TKN_RESULTS_CMD=(
   tkn-results
   records
   list
-  "${TEKTON_NAMESPACE}/results/-"
   --addr "$TEKTON_RESULTS_API_ADDR"
   --insecure
   -o json
@@ -81,7 +81,7 @@ fi
 # - Filter for PipelineRun records only (data.type == "tekton.dev/v1.PipelineRun")
 # - Base64 decode the payload (data.value)
 # - Output one PipelineRun JSON per line
-"${TKN_RESULTS_CMD[@]}" 2>&1 | jq -c '
+"${TKN_RESULTS_CMD[@]}" -- "${TEKTON_NAMESPACE}/results/-" 2>&1 | jq -c '
   .records[]?
   | select(.data.type == "tekton.dev/v1.PipelineRun")
   | .data.value

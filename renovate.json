@@ -7,27 +7,48 @@
       "transformTemplates": [
         "{\"releases\": $map($filter(releases, function($r) { $contains($r.version, \"openshift-client-linux-amd64-rhel9-\") and $contains($r.version, \".tar.gz\") }), function($r) { var line := $r.version; var digest := $substring(line, 0, 64); var filename := $substring(line, 66, $length(line)); var ver := $replace($replace(filename, \"openshift-client-linux-amd64-rhel9-\", \"\"), \".tar.gz\", \"\"); { \"version\": ver, \"digest\": digest } })}"
       ]
+    },
+    "openshift-mirror-stable-arm64": {
+      "defaultRegistryUrlTemplate": "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/sha256sum.txt",
+      "format": "plain",
+      "transformTemplates": [
+        "{\"releases\": $map($filter(releases, function($r) { $contains($r.version, \"openshift-client-linux-arm64-rhel9-\") and $contains($r.version, \".tar.gz\") }), function($r) { var line := $r.version; var digest := $substring(line, 0, 64); var filename := $substring(line, 66, $length(line)); var ver := $replace($replace(filename, \"openshift-client-linux-arm64-rhel9-\", \"\"), \".tar.gz\", \"\"); { \"version\": ver, \"digest\": digest } })}"
+      ]
     }
   },
   "customManagers": [
     {
       "customType": "regex",
       "description": "OpenShift client (oc) in artifacts.lock.yaml",
-      "managerFilePatterns": ["^artifacts\\.lock\\.yaml$"],
+      "managerFilePatterns": ["artifacts.lock.yaml"],
       "matchStrings": [
         "download_url: \"https://mirror\\.openshift\\.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-amd64-rhel9-(?<currentValue>[\\d.]+)\\.tar\\.gz\"\\s+checksum: \"sha256:(?<currentDigest>[a-f0-9]{64})\""
       ],
+      "depNameTemplate": "openshift-client-linux-amd64-rhel9",
       "datasourceTemplate": "custom.openshift-mirror-stable",
       "versioningTemplate": "semver-coerced",
       "autoReplaceStringTemplate": "download_url: \"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-amd64-rhel9-{{{newValue}}}.tar.gz\"\n    checksum: \"sha256:{{{newDigest}}}\""
     },
     {
       "customType": "regex",
+      "description": "OpenShift client (oc) arm64 in artifacts.lock.yaml",
+      "managerFilePatterns": ["artifacts.lock.yaml"],
+      "matchStrings": [
+        "download_url: \"https://mirror\\.openshift\\.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-arm64-rhel9-(?<currentValue>[\\d.]+)\\.tar\\.gz\"\\s+checksum: \"sha256:(?<currentDigest>[a-f0-9]{64})\""
+      ],
+      "depNameTemplate": "openshift-client-linux-arm64-rhel9",
+      "datasourceTemplate": "custom.openshift-mirror-stable-arm64",
+      "versioningTemplate": "semver-coerced",
+      "autoReplaceStringTemplate": "download_url: \"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-arm64-rhel9-{{{newValue}}}.tar.gz\"\n    checksum: \"sha256:{{{newDigest}}}\""
+    },
+    {
+      "customType": "regex",
       "description": "OpenShift client (oc) in prepare-oc-client-for-build.sh",
-      "managerFilePatterns": ["^scripts/prepare-oc-client-for-build\\.sh$"],
+      "managerFilePatterns": ["scripts/prepare-oc-client-for-build.sh"],
       "matchStrings": [
         "URL=\"https://mirror\\.openshift\\.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-amd64-rhel9-(?<currentValue>[\\d.]+)\\.tar\\.gz\"\\s+EXPECTED_SHA=\"(?<currentDigest>[a-f0-9]{64})\""
       ],
+      "depNameTemplate": "openshift-client-linux-amd64-rhel9",
       "datasourceTemplate": "custom.openshift-mirror-stable",
       "versioningTemplate": "semver-coerced",
       "autoReplaceStringTemplate": "URL=\"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-amd64-rhel9-{{{newValue}}}.tar.gz\"\nEXPECTED_SHA=\"{{{newDigest}}}\""

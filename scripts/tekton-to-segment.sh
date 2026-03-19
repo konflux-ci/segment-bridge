@@ -26,8 +26,9 @@ set -o pipefail -o errexit -o nounset
 CLUSTER_ID="${CLUSTER_ID:-anonymous}"
 #
 # Optional Konflux public info (e.g. from get-konflux-public-info.sh).
-# When set, clusterIdHash (hash of CLUSTER_ID), konfluxVersion, and kubernetesVersion
-# are added to Segment event properties. When unset, these properties are omitted.
+# When CLUSTER_ID is non-empty, clusterIdHash is added to properties and
+# context.device.id is set to the same value. When KONFLUX_VERSION and/or
+# KUBERNETES_VERSION are set, those are added to properties.
 # get-konflux-public-info.sh may leave them unset when the configmap/namespace is
 # missing or not accessible.
 # KONFLUX_VERSION="${KONFLUX_VERSION:-}"
@@ -84,16 +85,18 @@ transform_konflux_record() {
       end
     ) as $duration |
 
-    {
+    ({
       type: "track",
       anonymousId: "anonymous",
-      context: {
-        library: {
-          name: "segment-bridge",
-          version: "2.0.0"
-        }
-      }
-    } as $base |
+      context: (
+        {
+          library: {
+            name: "segment-bridge",
+            version: "2.0.0"
+          }
+        } + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
+      )
+    }) as $base |
 
     (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
     (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
@@ -159,16 +162,18 @@ transform_record() {
     ((.status.childReferences // []) | length) as $taskCount |
 
     # Common base fields shared by both events
-    {
+    ({
       type: "track",
       anonymousId: "anonymous",
-      context: {
-        library: {
-          name: "segment-bridge",
-          version: "2.0.0"
-        }
-      }
-    } as $base |
+      context: (
+        {
+          library: {
+            name: "segment-bridge",
+            version: "2.0.0"
+          }
+        } + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
+      )
+    }) as $base |
 
     # Optional Konflux public info (only when env vars set)
     (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |

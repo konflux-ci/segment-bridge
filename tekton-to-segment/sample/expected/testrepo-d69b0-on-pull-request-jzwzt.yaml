@@ -3,6 +3,8 @@ context:
   library:
     name: segment-bridge
     version: 2.0.0
+  device:
+    id: f069097ced1b
 event: PipelineRun Started
 messageId: 249909ab-3563-4c22-8ddd-9ea27ce22a72-started
 properties:
@@ -21,6 +23,8 @@ context:
   library:
     name: segment-bridge
     version: 2.0.0
+  device:
+    id: f069097ced1b
 event: PipelineRun Completed
 messageId: 249909ab-3563-4c22-8ddd-9ea27ce22a72-completed
 properties:

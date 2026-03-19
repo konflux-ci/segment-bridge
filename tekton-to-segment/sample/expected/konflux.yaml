@@ -3,6 +3,8 @@ context:
   library:
     name: segment-bridge
     version: 2.0.0
+  device:
+    id: f069097ced1b
 event: Operator Deployment Started
 messageId: 8208a728-391e-47da-a461-26e9e6f48ada-started
 properties:
@@ -18,6 +20,8 @@ context:
   library:
     name: segment-bridge
     version: 2.0.0
+  device:
+    id: f069097ced1b
 event: Operator Deployment Completed
 messageId: 8208a728-391e-47da-a461-26e9e6f48ada-completed
 properties:

@@ -1,0 +1,33 @@
+anonymousId: anonymous
+context:
+  library:
+    name: segment-bridge
+    version: 2.0.0
+  device:
+    id: f069097ced1b
+event: Namespace Created
+messageId: 5a9dedd8-844e-4cd6-9704-738cbbe18d89-namespace-created
+properties:
+  clusterIdHash: f069097ced1b
+  konfluxVersion: "1.2.3"
+  kubernetesVersion: "1.30"
+  namespaceHash: 1fa5e6ceea39
+timestamp: "2026-03-04T07:30:50Z"
+type: track
+---
+anonymousId: anonymous
+context:
+  library:
+    name: segment-bridge
+    version: 2.0.0
+  device:
+    id: f069097ced1b
+event: Namespace Created
+messageId: 1e11a3b6-b46a-4b62-83d3-13cf2edbddec-namespace-created
+properties:
+  clusterIdHash: f069097ced1b
+  konfluxVersion: "1.2.3"
+  kubernetesVersion: "1.30"
+  namespaceHash: 01618a158dc1
+timestamp: "2026-02-17T14:42:19Z"
+type: track

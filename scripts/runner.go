@@ -57,6 +57,21 @@ func AssertExecuteScript(t *testing.T, scriptPath string) []byte {
 	return output
 }
 
+// AssertExecuteScriptWithEnv runs the script with the given environment
+// (merged with the current process env). Keys in env override existing vars.
+// Use for tests that need to set e.g. NAMESPACE_NOW_ISO.
+func AssertExecuteScriptWithEnv(t *testing.T, scriptPath string, env map[string]string) []byte {
+	t.Helper()
+	cmd := exec.Command(scriptPath)
+	cmd.Env = os.Environ()
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	output, err := cmd.Output()
+	assert.NoError(t, err, "failed to run script with env")
+	return output
+}
+
 // AssertExecuteScriptWithArgs runs the script with the given arguments and returns stdout.
 // It asserts that the command succeeded. Use this for scripts that take arguments (e.g. a wrapper that runs a child command).
 // Behaves like AssertExecuteScript (stdout only); stderr is not captured.

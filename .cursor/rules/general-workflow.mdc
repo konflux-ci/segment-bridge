@@ -55,7 +55,8 @@ Signed-off-by: Your Name <your-email@example.com>
 
 ## PR and lint
 
-- Run **gitlint** and **yamllint** (and any other project lint checks) locally before pushing. Fix issues and re-push. Prefer **amending existing PR commits** over adding new commits where it makes sense.
+- **Before every push** (including after amend): run **`gitlint --commits HEAD~1..HEAD`** for single-commit updates, or **`gitlint --commits origin/main..HEAD`** (adjust base ref) for multi-commit branches. **Do not push until gitlint exits 0.** The prior title failed only because it was 73 chars (max 72).
+- Run **yamllint** and any other project lint checks locally before pushing. Fix issues and re-push. Prefer **amending existing PR commits** over adding new commits where it makes sense.
 
 ### Yamllint: avoiding failures
 

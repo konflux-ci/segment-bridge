@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -24,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -36,6 +38,14 @@ const scriptPath = "../scripts/fetch-component-records.sh"
 
 const sampleDir = "testdata/component-samples"
 
+// Match fetch-namespace-records wait style (deadline + poll + diagnostic on timeout).
+const waitComponentTimeout = 10 * time.Second
+const waitComponentPoll = 100 * time.Millisecond
+
+var componentGroupKind = schema.GroupKind{Group: "appstudio.redhat.com", Kind: "Component"}
+
+const componentAPIVersion = "v1alpha1"
+
 func buildRestConfig(t *testing.T) *rest.Config {
 	t.Helper()
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -43,6 +53,58 @@ func buildRestConfig(t *testing.T) *rest.Config {
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides).ClientConfig()
 	require.NoError(t, err, "build rest config from KUBECONFIG")
 	return config
+}
+
+// waitForComponentRESTMapping polls until the API server serves Component (CRD
+// established) and RESTMapper resolves it, matching the readiness style of
+// waitForTenantNamespaces.
+func waitForComponentRESTMapping(ctx context.Context, t *testing.T, disco discovery.CachedDiscoveryInterface) *restmapper.DeferredDiscoveryRESTMapper {
+	t.Helper()
+	deadline := time.Now().Add(waitComponentTimeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		disco.Invalidate()
+		m := restmapper.NewDeferredDiscoveryRESTMapper(disco)
+		_, lastErr = m.RESTMapping(componentGroupKind, componentAPIVersion)
+		if lastErr == nil {
+			return m
+		}
+		select {
+		case <-ctx.Done():
+			require.Fail(t, "context cancelled while waiting for Component RESTMapping")
+		case <-time.After(waitComponentPoll):
+		}
+	}
+	require.Fail(t, fmt.Sprintf("timeout waiting for Component RESTMapping after %v: %v",
+		waitComponentTimeout, lastErr))
+	return nil
+}
+
+// waitForComponentPresent polls until Get(componentName) in namespace succeeds.
+func waitForComponentPresent(ctx context.Context, t *testing.T, dynClient dynamic.Interface, mapper *restmapper.DeferredDiscoveryRESTMapper, namespace, componentName string) {
+	t.Helper()
+	mapping, err := mapper.RESTMapping(componentGroupKind, componentAPIVersion)
+	require.NoError(t, err, "RESTMapping for Component before wait")
+	gvr := mapping.Resource
+	ri := dynClient.Resource(gvr).Namespace(namespace)
+	deadline := time.Now().Add(waitComponentTimeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		_, lastErr = ri.Get(ctx, componentName, metav1.GetOptions{})
+		if lastErr == nil {
+			return
+		}
+		if !errors.IsNotFound(lastErr) {
+			require.NoError(t, lastErr, "unexpected error waiting for Component %s/%s", namespace, componentName)
+		}
+		select {
+		case <-ctx.Done():
+			require.Fail(t, "context cancelled while waiting for Component %s/%s", namespace, componentName)
+		case <-time.After(waitComponentPoll):
+		}
+	}
+	require.Fail(t, fmt.Sprintf("timeout waiting for Component %s/%s after %v: %v",
+		namespace, componentName, waitComponentTimeout, lastErr))
 }
 
 // applyComponentSampleDir applies each YAML in sampleDir in sorted order (CRD first).
@@ -75,7 +137,8 @@ func applyComponentSampleDir(t *testing.T, inputDir string) {
 	}
 	sort.Strings(names)
 
-	applyFile := func(path string, m *restmapper.DeferredDiscoveryRESTMapper) {
+	for _, name := range names {
+		path := filepath.Join(inputDir, name)
 		data, err := os.ReadFile(path)
 		require.NoError(t, err, "read %s", path)
 		decoder := yaml.NewDecoder(bytes.NewReader(data))
@@ -97,7 +160,7 @@ func applyComponentSampleDir(t *testing.T, inputDir string) {
 			if gvk.Empty() || gvk.Kind == "" {
 				continue
 			}
-			mapping, err := m.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
+			mapping, err := mapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
 			require.NoError(t, err, "rest mapping for %s in %s", gvk, path)
 			gvr := mapping.Resource
 			var ri dynamic.ResourceInterface
@@ -115,19 +178,15 @@ func applyComponentSampleDir(t *testing.T, inputDir string) {
 				_, err = ri.Update(ctx, obj, metav1.UpdateOptions{})
 			}
 			require.NoError(t, err, "apply resource from %s", path)
-		}
-	}
 
-	for i, name := range names {
-		path := filepath.Join(inputDir, name)
-		applyFile(path, mapper)
-		if i == 0 || strings.Contains(strings.ToLower(name), "crd") {
-			disco.Invalidate()
-			mapper = restmapper.NewDeferredDiscoveryRESTMapper(disco)
-			time.Sleep(500 * time.Millisecond)
+			if gvk.Kind == "CustomResourceDefinition" {
+				mapper = waitForComponentRESTMapping(ctx, t, disco)
+			}
+			if gvk.Kind == "Component" {
+				waitForComponentPresent(ctx, t, dynClient, mapper, obj.GetNamespace(), obj.GetName())
+			}
 		}
 	}
-	time.Sleep(500 * time.Millisecond)
 }
 
 func TestFetchComponentRecords(t *testing.T) {

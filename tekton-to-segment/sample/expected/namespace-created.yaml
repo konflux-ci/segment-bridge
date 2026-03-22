@@ -3,6 +3,8 @@ context:
   library:
     name: segment-bridge
     version: 2.0.0
+  device:
+    id: f069097ced1b
 event: Namespace Created
 messageId: 5a9dedd8-844e-4cd6-9704-738cbbe18d89-namespace-created
 properties:
@@ -18,6 +20,8 @@ context:
   library:
     name: segment-bridge
     version: 2.0.0
+  device:
+    id: f069097ced1b
 event: Namespace Created
 messageId: 1e11a3b6-b46a-4b62-83d3-13cf2edbddec-namespace-created
 properties:

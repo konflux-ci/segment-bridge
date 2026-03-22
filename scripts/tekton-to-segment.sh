@@ -232,16 +232,18 @@ transform_namespace_record() {
     --arg cluster_id_hash "$cluster_id_hash" \
     --arg konflux_version "${KONFLUX_VERSION:-}" \
     --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
-    {
+    ({
       type: "track",
       anonymousId: "anonymous",
-      context: {
-        library: {
-          name: "segment-bridge",
-          version: "2.0.0"
-        }
-      }
-    } as $base |
+      context: (
+        {
+          library: {
+            name: "segment-bridge",
+            version: "2.0.0"
+          }
+        } + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
+      )
+    }) as $base |
     (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
     (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
     (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end) as $k8sProp |

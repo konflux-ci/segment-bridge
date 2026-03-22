@@ -11,11 +11,15 @@
 #   one event is emitted:
 #     "Namespace Created" - timestamped at metadata.creationTimestamp
 #
+#   For each Component (from fetch-component-records.sh or inline records), one event:
+#     "Component Created" - timestamped at metadata.creationTimestamp
+#
 #   This script is part of the Tekton Results bridge pipeline:
 #   ... | tekton-to-segment.sh | segment-mass-uploader.sh
 #
 #   Privacy: Namespace names are hashed with SHA256(namespace:cluster_id) to prevent
 #   identification while still allowing correlation within a cluster.
+#   Component and application names use SHA256(name:namespace:cluster_id) (12 hex chars).
 #
 set -o pipefail -o errexit -o nounset
 
@@ -55,6 +59,20 @@ hash_namespace() {
 # Used to add an anonymized cluster identifier to Segment events when Konflux info is present.
 hash_cluster_id() {
   echo -n "$CLUSTER_ID" | sha256sum | cut -c1-12
+}
+
+# hash_component_identity: SHA256(componentName:namespace:cluster_id), first 12 hex chars.
+hash_component_identity() {
+  local name="$1"
+  local ns="$2"
+  echo -n "${name}:${ns}:${CLUSTER_ID}" | sha256sum | cut -c1-12
+}
+
+# hash_application_in_namespace: SHA256(application:namespace:cluster_id), first 12 hex chars.
+hash_application_in_namespace() {
+  local application="$1"
+  local ns="$2"
+  echo -n "${application}:${ns}:${CLUSTER_ID}" | sha256sum | cut -c1-12
 }
 
 # transform_konflux_record: Transform a single Konflux CR JSON into two Segment events
@@ -259,6 +277,56 @@ transform_namespace_record() {
   '
 }
 
+# transform_component_record: Transform a single Component JSON into one Segment event
+#   (Component Created). Timestamp is metadata.creationTimestamp.
+# Arguments:
+#   $1 - Component JSON record
+#   $2 - Pre-computed namespace hash (metadata.namespace + CLUSTER_ID)
+#   $3 - Pre-computed component hash (name:namespace:CLUSTER_ID)
+#   $4 - Pre-computed application hash (spec.application:namespace:CLUSTER_ID)
+#   $5 - Pre-computed cluster ID hash (empty when Konflux info not added)
+transform_component_record() {
+  local record="$1"
+  local ns_hash="$2"
+  local component_hash="$3"
+  local application_hash="$4"
+  local cluster_id_hash="$5"
+
+  echo "$record" | jq -c --arg ns_hash "$ns_hash" \
+    --arg component_hash "$component_hash" \
+    --arg application_hash "$application_hash" \
+    --arg cluster_id_hash "$cluster_id_hash" \
+    --arg konflux_version "${KONFLUX_VERSION:-}" \
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
+    ({
+      type: "track",
+      anonymousId: "anonymous",
+      context: (
+        {
+          library: {
+            name: "segment-bridge",
+            version: "2.0.0"
+          }
+        } + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
+      )
+    }) as $base |
+    (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
+    (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
+    (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end) as $k8sProp |
+    ({
+      namespaceHash: $ns_hash,
+      componentHash: $component_hash,
+      applicationHash: $application_hash
+    } + $clusterProp + $konfluxProp + $k8sProp) as $props |
+    $base + {
+      messageId: (.metadata.uid + "-component-created"),
+      timestamp: .metadata.creationTimestamp,
+      event: "Component Created",
+      properties: $props
+    }
+  '
+}
+
 # Precompute cluster ID hash when Konflux info will be added (so we never send raw cluster ID)
 cluster_id_hash=""
 if [[ -n "${CLUSTER_ID:-}" ]]; then
@@ -285,6 +353,17 @@ while IFS= read -r record; do
     ns=$(echo "$record" | jq -r '.metadata.name // "unknown"')
     ns_hash=$(hash_namespace "$ns")
     transform_namespace_record "$record" "$ns_hash" "$cluster_id_hash"
+    continue
+  fi
+  if [[ "$kind" == "Component" ]]; then
+    ns=$(echo "$record" | jq -r '.metadata.namespace // "unknown"')
+    comp_name=$(echo "$record" | jq -r '.metadata.name // "unknown"')
+    application=$(echo "$record" | jq -r '.spec.application // ""')
+    ns_hash=$(hash_namespace "$ns")
+    component_hash=$(hash_component_identity "$comp_name" "$ns")
+    application_hash=$(hash_application_in_namespace "$application" "$ns")
+    transform_component_record "$record" "$ns_hash" "$component_hash" \
+      "$application_hash" "$cluster_id_hash"
     continue
   fi
   [[ "$kind" != "PipelineRun" ]] && continue

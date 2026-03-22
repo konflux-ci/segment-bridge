@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -51,8 +52,8 @@ func GetRepoRootDir() (string, error) {
 }
 
 func AssertExecuteScript(t *testing.T, scriptPath string) []byte {
-	cmd := exec.Command(scriptPath)
-	output, err := cmd.Output()
+	t.Helper()
+	output, err := testfixture.RunRepoScript(scriptPath, nil, nil)
 	assert.NoError(t, err, "failed to run script")
 	return output
 }
@@ -62,12 +63,11 @@ func AssertExecuteScript(t *testing.T, scriptPath string) []byte {
 // Use for tests that need to set e.g. NAMESPACE_NOW_ISO.
 func AssertExecuteScriptWithEnv(t *testing.T, scriptPath string, env map[string]string) []byte {
 	t.Helper()
-	cmd := exec.Command(scriptPath)
-	cmd.Env = os.Environ()
+	merged := os.Environ()
 	for k, v := range env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+		merged = append(merged, k+"="+v)
 	}
-	output, err := cmd.Output()
+	output, err := testfixture.RunRepoScript(scriptPath, nil, merged)
 	assert.NoError(t, err, "failed to run script with env")
 	return output
 }
@@ -77,9 +77,7 @@ func AssertExecuteScriptWithEnv(t *testing.T, scriptPath string, env map[string]
 // Behaves like AssertExecuteScript (stdout only); stderr is not captured.
 func AssertExecuteScriptWithArgs(t *testing.T, scriptPath string, args ...string) []byte {
 	t.Helper()
-	cmd := exec.Command(scriptPath, args...)
-	cmd.Env = os.Environ()
-	output, err := cmd.Output()
+	output, err := testfixture.RunRepoScript(scriptPath, nil, os.Environ(), args...)
 	assert.NoError(t, err, "failed to run script with args")
 	return output
 }

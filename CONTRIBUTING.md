@@ -112,6 +112,22 @@ _tests.go and with .go.
     go test ./scripts
     ```
 
+#### Running shell-script tests inside the bridge image (optional)
+
+CI builds the image from [`Dockerfile`](Dockerfile) and sets `SEGMENT_BRIDGE_TEST_IMAGE`
+so script-based tests execute with `/usr/local/bin/*.sh` inside that image (matching
+production layout). Locally, after building (see the Dockerfile header for
+`prepare-oc-client-for-build.sh` and the `podman build -v ... deps ...` invocation),
+you can run the same tests with:
+
+```
+export SEGMENT_BRIDGE_TEST_IMAGE=segment-bridge:test
+go test ./...
+```
+
+Optional: `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` selects `podman` or `docker` when
+both are installed; otherwise `podman` is tried first, then `docker`.
+
 #### Test Coverage
 [TBD]
 

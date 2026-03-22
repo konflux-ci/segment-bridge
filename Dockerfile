@@ -23,19 +23,19 @@
 
 # First stage: Build the tkn-results binary
 FROM registry.access.redhat.com/ubi9/go-toolset:9.5-1739801907 AS builder
+ARG TARGETARCH
 WORKDIR /build
-ENV GOOS=linux
-ENV GOARCH=amd64
-RUN go install github.com/tektoncd/results/cmd/tkn-results@v0.14.0 && \
-    cp "$(go env GOPATH)/bin/tkn-results" /build/tkn-results
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOBIN=/build \
+    go install github.com/tektoncd/results/cmd/tkn-results@v0.14.0
 
 # Second stage: Extract OpenShift client (oc + kubectl) from prefetched tarball.
 # Konflux mounts the Hermeto prefetch output at /cachi2; the tarball is not in the
 # build context, so we must use RUN to read from the mounted path (not COPY).
 # Only the extracted binaries are copied to the final image.
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS oc-client
+ARG TARGETARCH
 RUN microdnf install -y --nodocs tar gzip && microdnf clean all && rm -rf /var/cache/yum
-RUN cp /cachi2/output/deps/generic/openshift-client-linux-amd64-rhel9.tar.gz /tmp/oc.tar.gz && \
+RUN cp "/cachi2/output/deps/generic/openshift-client-linux-${TARGETARCH:-amd64}-rhel9.tar.gz" /tmp/oc.tar.gz && \
     tar -xzf /tmp/oc.tar.gz -C /tmp && \
     mv /tmp/oc /tmp/kubectl /usr/local/bin/ && \
     rm /tmp/oc.tar.gz

@@ -17,6 +17,11 @@
 #                             computing the window. Used by tests for
 #                             deterministic filtering. If unset, system time is used.
 #
+#   If the Component API is not registered (CRD absent), kubectl/oc get fails
+#   with "doesn't have a resource type \"components\"". The script then exits 0
+#   after a WARNING on stderr and prints nothing to stdout so the pipeline is not
+#   aborted. Other errors (e.g. RBAC) still fail the script.
+#
 set -o pipefail -o errexit -o nounset
 
 KUBECTL=""
@@ -49,7 +54,12 @@ set +e
 ret_kubectl=${PIPESTATUS[0]} ret_jq=${PIPESTATUS[1]}
 set -e
 if [[ $ret_kubectl -ne 0 ]]; then
-	echo "ERROR: $(cat "$KUBE_ERR")" >&2
+	err=$(cat "$KUBE_ERR")
+	if grep -qF 'resource type "components"' <<< "$err"; then
+		echo "WARNING: AppStudio Component API not registered; skipping component fetch" >&2
+		exit 0
+	fi
+	echo "ERROR: $err" >&2
 	exit 1
 fi
 if [[ $ret_jq -ne 0 ]]; then

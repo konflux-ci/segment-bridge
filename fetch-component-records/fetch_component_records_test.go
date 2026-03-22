@@ -218,6 +218,29 @@ func TestFetchComponentRecords(t *testing.T) {
 	})
 }
 
+// TestFetchComponentRecordsExitsZeroWhenComponentCRDNotInstalled ensures the
+// pipeline does not fail when the Component API is absent (no CRD on cluster).
+// Kwok starts without our test CRD; we never apply component-samples here.
+func TestFetchComponentRecordsExitsZeroWhenComponentCRDNotInstalled(t *testing.T) {
+	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
+		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
+		now := time.Now().UTC().Format(time.RFC3339)
+		scriptAbs, err := filepath.Abs(scriptPath)
+		require.NoError(t, err)
+		cmd := exec.Command(scriptAbs)
+		cmd.Env = os.Environ()
+		cmd.Env = append(cmd.Env, "COMPONENT_NOW_ISO="+now)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		out, err := cmd.Output()
+		require.NoError(t, err,
+			"script must exit 0 when Component API is absent (stderr=%q)", stderr.String())
+		assert.Empty(t, strings.TrimSpace(string(out)), "stdout must be empty when skipping")
+		assert.Contains(t, strings.ToLower(stderr.String()), "skipping",
+			"expected skip WARNING on stderr")
+	})
+}
+
 // jqFilterTimeWindow matches fetch-component-records.sh (effective time vs cutoff).
 const jqFilterTimeWindow = `
   .items[]? |

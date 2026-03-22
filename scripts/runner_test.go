@@ -15,11 +15,11 @@ func TestLookPath(t *testing.T) {
 		wantErr    bool
 	}{
 		{"no-such-file", true},
-		{"fetch-uj-records.sh", false},
+		{"fetch-tekton-records.sh", false},
 		{"fetch-konflux-op-records.sh", false},
 		{"fetch-namespace-records.sh", false},
 		{"get-konflux-public-info.sh", false},
-		{"splunk-to-segment.sh", false},
+		{"tekton-to-segment.sh", false},
 		{"segment-mass-uploader.sh", false},
 	}
 	for _, tt := range tests {

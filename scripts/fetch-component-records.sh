@@ -18,11 +18,38 @@
 #                             deterministic filtering. If unset, system time is used.
 #
 #   If the Component API is not registered (CRD absent), kubectl/oc get fails
-#   with "doesn't have a resource type \"components\"". The script then exits 0
-#   after a WARNING on stderr and prints nothing to stdout so the pipeline is not
-#   aborted. Other errors (e.g. RBAC) still fail the script.
+#   with messages that vary by client version or wording. We treat several
+#   patterns as "API missing" (see is_component_api_missing_error), exit 0 with
+#   a WARNING on stderr, and print nothing to stdout so the pipeline is not
+#   aborted. Errors that look like RBAC (forbidden/unauthorized) always fail.
 #
 set -o pipefail -o errexit -o nounset
+
+# is_component_api_missing_error: true when stderr suggests the Component kind
+# is unknown / not served, not auth failure. Matches are intentionally broad
+# (resource type + components, FQ name + not-found-ish phrases, "no matches for
+# kind" Component, etc.) while excluding forbidden/unauthorized.
+is_component_api_missing_error() {
+	local err="$1"
+	if grep -qiE 'forbidden|unauthorized' <<< "$err"; then
+		return 1
+	fi
+	# "doesn't have a resource type … components" and variants (quotes/locale)
+	if grep -qiE 'doesn.t have a resource type|does not have a resource type|do not have a resource type' <<< "$err" &&
+		grep -qiE 'components|components\.appstudio\.redhat\.com' <<< "$err"; then
+		return 0
+	fi
+	# Fully-qualified resource name in "unknown / not found" style errors
+	if grep -qiF 'components.appstudio.redhat.com' <<< "$err" &&
+		grep -qiE 'not[[:space:]]+found|could[[:space:]]+not[[:space:]]+find|unknown|unrecognized|not[[:space:]]+served|no[[:space:]]+matches' <<< "$err"; then
+		return 0
+	fi
+	# Discovery / OpenShift-style phrasing (kind name near "no matches")
+	if grep -qiE 'no matches for kind.{1,96}component' <<< "$err"; then
+		return 0
+	fi
+	return 1
+}
 
 KUBECTL=""
 if command -v oc &>/dev/null; then
@@ -55,7 +82,7 @@ ret_kubectl=${PIPESTATUS[0]} ret_jq=${PIPESTATUS[1]}
 set -e
 if [[ $ret_kubectl -ne 0 ]]; then
 	err=$(cat "$KUBE_ERR")
-	if grep -qF 'resource type "components"' <<< "$err"; then
+	if is_component_api_missing_error "$err"; then
 		echo "WARNING: AppStudio Component API not registered; skipping component fetch" >&2
 		exit 0
 	fi

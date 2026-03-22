@@ -24,6 +24,13 @@ rules:
       - namespaces
     verbs:
       - list
+  # fetch-component-records.sh: list AppStudio Components cluster-wide
+  - apiGroups:
+      - appstudio.redhat.com
+    resources:
+      - components
+    verbs:
+      - list
   - apiGroups:
       - config.openshift.io
     resources:

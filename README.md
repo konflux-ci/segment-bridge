@@ -1,90 +1,71 @@
 # segment-bridge
 
-Bridge selected events from AppStudio into [Segment][1]
+Bridge anonymous [Tekton](https://tekton.dev/) PipelineRun telemetry from Konflux
+clusters into [Segment][1] (and downstream analytics such as Amplitude).
 
 ```mermaid
 flowchart TB
-    subgraph A["RHTAP clusters"]
-        A1[(API server)]
-        A2(["OpenShift
-        logging collector"])
-
-        A1--"Audit Logs"-->A2
+    subgraph A["Konflux cluster"]
+        A1["Tekton Results API"]
+        A2["Kubernetes API"]
     end
 
-    A2--"Audit Logs"-->C
-
-    C[("Splunk")]
-
-    subgraph B["RHTAP Segment bridge"]
-        B2([fetch-uj-records.sh])
-        B3([splunk-to-segment.sh])
-        subgraph B4[segment-mass-uploader.sh]
+    subgraph B["segment-bridge container"]
+        B1["fetch-tekton-records.sh"]
+        B1b["fetch-konflux-op-records.sh"]
+        B1c["fetch-namespace-records.sh"]
+        B2["get-konflux-public-info.sh"]
+        B3["tekton-to-segment.sh"]
+        subgraph B4["segment-mass-uploader.sh"]
             B4C([split])
             B4A([segment-uploader.sh])
             B4B([mk-segment-batch-payload.sh])
-
-            B4C--"Segment events (In ~490KB batches)"-->B4A
-            B4A--"events"-->B4B--"batch call payload"-->B4A
+            B4C--"Segment events (~490KB batches)"-->B4A
+            B4A--"events"-->B4B--"batch payload"-->B4A
         end
-
-        B2--"Splunk-formatted UJ records"-->B3
-        B3--"Segment events"--> B4
+        B1 --> B2
+        B1b --> B2
+        B1c --> B2
+        B2 --> B3
+        B3 --> B4
     end
 
-    C-- "User resource
-     actions" ---->B2
+    A1 --> B1
+    A2 --> B1b
+    A2 --> B1c
 
     G([Segment])
     H[(Amplitude)]
-
-    B4-- "User resource events
-     (Via batch calls)" -->G-->H
+    B4 --> G --> H
 ```
+
 **Note:** If you cannot see the drawing above in GitHub, make sure you are not
 blocking JavaScript from *viewscreen.githubusercontent.com*.
 
-Given that:
+The container entrypoint [`tekton-main-job.sh`](scripts/tekton-main-job.sh)
+orchestrates: fetch PipelineRun records and related cluster context, enrich with
+public Konflux metadata, map to Segment batch events, then upload in chunks.
+See the [`Dockerfile`](Dockerfile) for the image layout and typical environment
+variables.
 
-1. The API server audit logs from the RHTAP clusters are being forwarded to
-   Splunk
+## Deployment
 
-we can send details about the users' activity as seen via the cluster API
-server by doing the following on a periodic basis:
-
-1. Run a Splunk query to extract the relevant user activity events from the
-   API server audit logs.
-2. Transform the results into Segment batch call event records (e.g. using
-   splunk-to-segment.sh).
-3. Stream the events into the Segment API (e.g. using segment-mass-uploader.sh).
+Kubernetes manifests live under [`config/`](config/) (Kustomize base). The CronJob
+uses the published image default entrypoint (no `command` override), so the
+Tekton pipeline runs automatically.
 
 [1]: https://app.segment.com
 
 Segment has a [built-in mechanism for removing duplicate events][ES1]. This
-mean that we can safely resend the same event multiple times to increase the
-sending process reliability. The duplicate remove mechanism is based on the
-`messageid` [common message field][ES2]. We can use the `auditID` field of the
-cluster audit log record as the value for this field.
+means we can safely resend the same event multiple times to increase delivery
+reliability. The mechanism uses the `messageId` [common message field][ES2].
 
-Segment also has a [*batch* call][ES3] that allows for sending multiple events
-within a single API call. There is a limit of 500KB data size per-call, while
-individual event JSON records should not exceed 32KB.
+Segment also has a [*batch* call][ES3] that allows sending multiple events in
+one request. There is a limit of 500KB per call; individual event JSON records
+should not exceed 32KB.
 
-The architecture for the event sending logic would then be to repeat the
-following logic on an hourly basis:
-
-1. Run a Splunk query to retrieve user journey events in the form of a
-   series of JSON objects that match the format of the Segment batch call event
-   records.
-2. Make adjustments as needed to generate the actual Segment batch call records.
-3. Split the stream of records into ~500KB chunks
-4. Send each chunk to Segment via a batch call. Attempt this up to 3 times.
-
-Since the logic will run on an hourly basis but will query the events from the
-last 4 hours, it will automatically attempt to send each event up to 4 times
-(Not including retries for failed API calls). Monitoring logic around the
-sending job should allow us to determine if the job failed to complete more
-then 4 times in a row and issue an appropriate alert.
+The uploader splits the stream into ~500KB chunks and retries failed batch
+calls (configurable, default three attempts).
 
 [ES1]: https://segment.com/blog/exactly-once-delivery/
 [ES2]: https://segment.com/docs/connections/spec/common/

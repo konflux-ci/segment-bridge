@@ -8,12 +8,6 @@ updates:
     commit-message:
       prefix: "chore(Dependabot-docker): "
   - package-ecosystem: "docker"
-    directory: "/splunk/"
-    schedule:
-      interval: daily
-    commit-message:
-      prefix: "chore(Dependabot-docker): "
-  - package-ecosystem: "docker"
     directory: "/kwok/"
     schedule:
       interval: daily

@@ -6,7 +6,7 @@ This document provides guidelines for contributing to this repository.
 
 ### Prerequisites
 * Basic tools: `curl`, `jq`, `oc`
-* go: v1.19
+* Go: version in [`go.mod`](go.mod) (see also [`mise.toml`](mise.toml) for a pinned toolchain via [mise](https://mise.jdx.dev/))
 * Container engine: `podman`
 
 ## Running a test environment
@@ -62,41 +62,6 @@ Now you can access the cluster using kubectl, e.g.: `kubectl get ns`.
 >
 > ```oc --kubeconfig=./kwok/kubeconfig --context=kwok get ns```
 
-### Setting up a containerized Splunk instance
-
-To set up a containerized Splunk instance, you can use either podman or docker.
-Follow these steps:
-
-1. Build the Splunk container using the following command:
-   ```
-   podman build -t splunk ./splunk
-   ```
-2. Run the Splunk instance by running the below command:
-   ```
-   podman play kube splunk/splunk_container_default.yaml
-   ```
-   For more information about the specific command inputs and options, refer
-   to the [Splunk documentation][CS1].
-3. Once the container is running, you can log in to the Splunk instance using
-   the username `admin` and the password you set up.
-4. To access the Splunk [REST API][CS2],
-   you can make API calls from outside the container using the `curl` command.
-   For example, you can run the following command to search all data:
-     ```
-     curl -u admin:YourPassword -k https://localhost:8089/services/search/jobs -d search="search *"
-     ```
-    you may also use the dedicated .netrc file and authenticate with it instead:
-    ```
-     curl --netrc-file -k https://localhost:8089/services/search/jobs -d search="search *"
-    ```
-5. If you want to use the Splunk UI, open a web browser on the host and navigate to
-   `localhost:8000`.
-
-[CS1]:
-https://docs.splunk.com/Documentation/Splunk/9.0.4/Installation/DeployandrunSplunkEnterpriseinsideDockercontainers
-[CS2]:
-https://docs.splunk.com/Documentation/Splunk/9.0.4/RESTTUT/RESTTutorialIntro
-
 ### Building and running the segment-bridge container image
 
 The scripts in this repo can be built into a container image to enable
@@ -109,22 +74,14 @@ can be built with:
 podman build -t segment-bridge .
 ```
 
-The scripts require access to Splunk, Segment and OpenShift credentials. One
-way to provide such access is to mount the local `~/.netrc` and
-`~/.kube/config` files (Assuming they contain suitable credentials) to the
-image with a command like the following:
-```
-podman run -it --rm \
-         -v ~/.netrc:/usr/local/etc/netrc:z \
-         -v ~/.kube/config:/usr/local/etc/kube_config:z \
-         segment-bridge
-```
-The following command can be run inside the container to test the full chain of
-scripts. This will copy real data from the staging audit logs in Splunk into the
-Segment DEV environment:
-```
-fetch-uj-records.sh | splunk-to-segment.sh | segment-mass-uploader.sh
-```
+The image runs [`tekton-main-job.sh`](scripts/tekton-main-job.sh), which needs
+Tekton Results API access, Kubernetes API access (service account or kubeconfig),
+and Segment credentials for upload. Typical variables include
+`TEKTON_RESULTS_API_ADDR`, `TEKTON_NAMESPACE`, `SEGMENT_BATCH_API`, and either
+`SEGMENT_WRITE_KEY` or a `.netrc` mounted for `CURL_NETRC`. See comments in the
+[`Dockerfile`](Dockerfile) for a full example `podman run`.
+
+Kubernetes deployment examples use Kustomize under [`config/`](config/).
 
 ### Unit Tests
 Go unit tests are included in various packages within the repository.
@@ -134,23 +91,25 @@ _tests.go and with .go.
 #### Running the Unit Tests Locally
 1. Clone your fork of the project.
 2. Navigate to the project's root directory
-3. To run all the Go unit tests in the repository,
-execute the following command `go clean -testcache && go test ./...`
-a similar output is expected:
+3. To run all the Go unit tests in the repository, from the repo root (with Go
+   on your PATH, or via `mise exec --` if you use [`mise.toml`](mise.toml)):
+   `go clean -testcache && go test ./...`
+   A similar output is expected (package list may vary):
 
     ```
-    ?   	github.com/redhat-appstudio/segment-bridge.git/cmd/querygen	[no test files]
-    ok  	github.com/redhat-appstudio/segment-bridge.git/querygen	0.002s
-    ok  	github.com/redhat-appstudio/segment-bridge.git/queryprint 0.002s
+    ?   	github.com/redhat-appstudio/segment-bridge.git/containerfixture	[no test files]
+    ?   	github.com/redhat-appstudio/segment-bridge.git/kwok	[no test files]
+    ok  	github.com/redhat-appstudio/segment-bridge.git/fetch-konflux-op-records	0.002s
+    ok  	github.com/redhat-appstudio/segment-bridge.git/fetch-namespace-records	0.002s
+    ok  	github.com/redhat-appstudio/segment-bridge.git/get-konflux-public-info	0.002s
     ok  	github.com/redhat-appstudio/segment-bridge.git/scripts	0.002s
     ok  	github.com/redhat-appstudio/segment-bridge.git/segment	0.002s
-    ok  	github.com/redhat-appstudio/segment-bridge.git/stats	0.002s
-    ok  	github.com/redhat-appstudio/segment-bridge.git/webfixture	0.002s
+    ok  	github.com/redhat-appstudio/segment-bridge.git/tekton-to-segment	0.002s
     ```
-4. If you want to run tests for a specific directory/path, you can do so by providing
-the package path, like this:
+4. If you want to run tests for a specific package, use its import path, for
+   example:
     ```
-    go test ./querygen
+    go test ./scripts
     ```
 
 #### Test Coverage
@@ -164,7 +123,11 @@ the package path, like this:
 
 ### Before submitting the PR
 
-1. The repository enforces pre-commit checks. Ensure installing `pre-commit` using `pip install -r requirements.lock` running `pre-commit run --all-files` and fixing any issues raised before committing any changes.
+1. The repository enforces pre-commit checks. Install dependencies and run hooks
+   on all files before committing, for example:
+   `mise run pre-commit`
+   (equivalent to a project-local venv from `requirements.lock` plus
+   `pre-commit run --all-files`; see [`mise.toml`](mise.toml).)
 2. Ensure to run `gofmt` to format your code.
 3. Make sure all unit tests are passing.
 

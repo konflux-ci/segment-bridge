@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Konflux UI Segment Events",
+  "description": "Union of all Konflux UI analytics event types",
+  "$defs": {
+    "CommonFields": {
+      "type": "object",
+      "description": "Base fields required on every Segment event sent from Konflux UI",
+      "properties": {
+        "clusterVersion": { "type": "string", "description": "Version of the OpenShift/Kubernetes cluster" },
+        "konfluxVersion": { "type": "string", "description": "Version of the Konflux instance" },
+        "kubernetesVersion": { "type": "string", "description": "Version of the Kubernetes cluster" },
+        "openshiftVersion": { "type": "string", "description": "Version of the OpenShift cluster" }
+      },
+      "required": ["clusterVersion", "konfluxVersion", "kubernetesVersion"],
+      "additionalProperties": false
+    },
+    "user_login_event": {
+      "x-event-name": "user_login",
+      "description": "Fired when a user successfully authenticates into Konflux",
+      "allOf": [
+        { "$ref": "#/$defs/CommonFields" },
+        {
+          "type": "object",
+          "properties": {
+            "userId":      { "type": "string", "description": "Unique identifier of the user", "x-pia": true, "x-obfuscation": "sha256", "tsType": "SHA256Hash" }
+          },
+          "required": ["userId"]
+        }
+      ]
+    },
+    "user_logout_event": {
+      "x-event-name": "user_logout",
+      "description": "Fired when a user session ends, either by explicit logout or session expiry",
+      "allOf": [
+        { "$ref": "#/$defs/CommonFields" },
+        {
+          "type": "object",
+          "properties": {
+            "userId": { "type": "string", "description": "Unique identifier of the user", "x-pia": true, "x-obfuscation": "sha256", "tsType": "SHA256Hash" }
+          },
+          "required": ["userId"]
+        }
+      ]
+    },
+    "feedback_submitted_event": {
+      "x-event-name": "feedback_submitted",
+      "description": "Fired when a user submits feedback through the Konflux UI",
+      "allOf": [
+        { "$ref": "#/$defs/CommonFields" },
+        {
+          "type": "object",
+          "properties": {
+            "userId":  { "type": "string", "description": "Unique identifier of the user", "x-pia": true, "x-obfuscation": "sha256", "tsType": "SHA256Hash" },
+            "rating":   { "type": "number", "description": "User satisfaction rating, typically on a 1-5 scale" },
+            "feedback": { "type": "string", "description": "Free-text feedback provided by the user" },
+            "email":    { "type": "string", "description": "Optional contact email provided by the user for follow-up" }
+          },
+          "required": ["userId", "rating", "feedback"]
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/user_login_event" },
+    { "$ref": "#/$defs/user_logout_event" },
+    { "$ref": "#/$defs/feedback_submitted_event" }
+  ]
+}

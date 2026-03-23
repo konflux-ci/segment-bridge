@@ -1,6 +1,8 @@
 [tools]
-go = "1.20.14"
+# go: must match go.mod. kubectl: pin for "mise exec" so integration tests see the same CLI as CI (see scripts/*.sh).
+go = "1.25.0"
 kind = "0.29.0"
+kubectl = "1.35.3"
 oc = "stable-4.21"
 python = "3.11"
 

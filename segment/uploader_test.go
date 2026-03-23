@@ -90,7 +90,11 @@ func TestUploader(t *testing.T) {
 
 				requestRecords += len(reqData.Batch)
 
-				assert.LessOrEqual(t, len(request.Body), tt.maxBatchSize)
+				// split limits NDJSON line bytes; the uploader wraps each chunk in {"Batch":[...]},
+				// so the HTTP body is slightly larger than the raw line sum (commas, brackets).
+				slack := 64 + len(reqData.Batch)*4
+				assert.LessOrEqual(t, len(request.Body), tt.maxBatchSize+slack,
+					"POST body includes Batch JSON beyond split --line-bytes payload")
 			}
 			assert.Equal(t, len(tt.data), requestRecords, "Wrong number of records sent")
 		})

@@ -22,11 +22,16 @@
 #
 set -o pipefail -o errexit -o nounset
 
-KUBECTL=""
-if command -v oc &>/dev/null; then
-	KUBECTL=oc
+# Prefer kubectl over oc when both exist (see fetch-konflux-op-records.sh). Override with KUBECTL=name.
+if [[ -n "${KUBECTL:-}" ]]; then
+	if ! command -v "$KUBECTL" &>/dev/null; then
+		echo "ERROR: KUBECTL=$KUBECTL not found in PATH" >&2
+		exit 1
+	fi
 elif command -v kubectl &>/dev/null; then
 	KUBECTL=kubectl
+elif command -v oc &>/dev/null; then
+	KUBECTL=oc
 else
 	echo "ERROR: oc or kubectl required but not found in PATH" >&2
 	exit 1

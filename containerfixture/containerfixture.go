@@ -163,6 +163,12 @@ func cleanup(t *testing.T, podName string) {
 }
 
 func WithServiceContainer(t *testing.T, ServiceManifest string, testFunc func(FixtureInfo)) {
+	if _, errK := exec.LookPath("kubectl"); errK != nil {
+		if _, errO := exec.LookPath("oc"); errO != nil {
+			t.Fatalf("container tests need kubectl or oc on PATH (kwok scripts): kubectl: %v; oc: %v", errK, errO)
+		}
+	}
+
 	rootDir, err := scripts.GetRepoRootDir()
 	if err != nil {
 		t.Errorf("Could not determine path for building the container")

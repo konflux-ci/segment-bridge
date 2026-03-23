@@ -3,6 +3,7 @@
 #   Wrapper that sets CLUSTER_ID, KONFLUX_VERSION, KUBERNETES_VERSION from cluster
 #   resources and runs the given command with those env vars.
 #   Requires oc or kubectl and jq on PATH, and KUBECONFIG (or default) set.
+#   When both oc and kubectl exist, kubectl is preferred (kwok tests). Set KUBECTL to override.
 #
 set -o pipefail -o errexit -o nounset
 
@@ -11,11 +12,16 @@ if [[ $# -eq 0 ]]; then
 	exit 1
 fi
 
-KUBECTL=""
-if command -v oc &>/dev/null; then
-	KUBECTL=oc
+# Prefer kubectl over oc when both exist (see fetch-konflux-op-records.sh). Override with KUBECTL=name.
+if [[ -n "${KUBECTL:-}" ]]; then
+	if ! command -v "$KUBECTL" &>/dev/null; then
+		echo "get-konflux-public-info.sh: KUBECTL=$KUBECTL not found in PATH" >&2
+		exit 1
+	fi
 elif command -v kubectl &>/dev/null; then
 	KUBECTL=kubectl
+elif command -v oc &>/dev/null; then
+	KUBECTL=oc
 else
 	echo "get-konflux-public-info.sh: need oc or kubectl in PATH" >&2
 	exit 1

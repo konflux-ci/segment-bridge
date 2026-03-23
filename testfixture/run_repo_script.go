@@ -86,6 +86,13 @@ func runInContainer(scriptPath string, stdin *os.File, env []string, args []stri
 	}
 	defer func() { _ = os.Remove(envFile) }()
 
+	// Rootless podman maps the image USER (1001) to a different host UID, so a
+	// 0600 kubeconfig owned by the test user is not readable in the container.
+	// Relax permissions on the temp kubeconfig only for this mount.
+	if kc := kubeconfigHostPathForMount(effectiveEnv); kc != "" {
+		_ = os.Chmod(kc, 0o644)
+	}
+
 	entry := filepath.Join(containerBinDir, base)
 	runArgs := []string{"run", "--rm", "--env-file", envFile, "--entrypoint", entry}
 	if runtime.GOOS == "linux" {
@@ -166,19 +173,28 @@ func writeContainerEnvFile(env []string) (path string, err error) {
 	return path, nil
 }
 
-// kubeconfigVolumeArgs returns a slice of []string { "-v", "host:container:ro" } for a readable KUBECONFIG file.
-func kubeconfigVolumeArgs(env []string) [][]string {
+// kubeconfigHostPathForMount returns the absolute path to the kubeconfig file when it exists and is a regular file.
+func kubeconfigHostPathForMount(env []string) string {
 	m := envSliceToMap(env)
 	p := strings.TrimSpace(m[kubeconfigEnvVar])
 	if p == "" {
-		return nil
+		return ""
 	}
 	abs, err := filepath.Abs(p)
 	if err != nil {
-		return nil
+		return ""
 	}
 	st, err := os.Stat(abs)
 	if err != nil || st.IsDir() {
+		return ""
+	}
+	return abs
+}
+
+// kubeconfigVolumeArgs returns a slice of []string { "-v", "host:container:ro" } for a readable KUBECONFIG file.
+func kubeconfigVolumeArgs(env []string) [][]string {
+	abs := kubeconfigHostPathForMount(env)
+	if abs == "" {
 		return nil
 	}
 	// Mount at the same path so kubectl/oc inside the container resolve KUBECONFIG without adjustment.

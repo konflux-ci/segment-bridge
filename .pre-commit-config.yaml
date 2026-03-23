@@ -20,6 +20,10 @@ repos:
     repo: https://github.com/dnephin/pre-commit-golang
     rev: v0.5.1
   - hooks:
+      # golangci-lint fmt --diff: enforce .golangci.yml formatters.
+      - id: golangci-lint-fmt
+        args:
+          - --diff
       - id: golangci-lint-full
         args:
           - --verbose

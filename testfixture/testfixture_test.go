@@ -107,3 +107,13 @@ func TestEnvSliceToMapLastWins(t *testing.T) {
 	assert.Equal(t, "3", m["A"])
 	assert.Equal(t, "2", m["B"])
 }
+
+func TestContainerTestEnvOverridesClusterID(t *testing.T) {
+	base := []string{"PATH=/usr/bin", "FOO=bar"}
+	out := containerTestEnvOverrides(base)
+	assert.Equal(t, "", envSliceToMap(out)["CLUSTER_ID"])
+
+	withID := []string{"PATH=/bin", "CLUSTER_ID=keep-me"}
+	out2 := containerTestEnvOverrides(withID)
+	assert.Equal(t, "keep-me", envSliceToMap(out2)["CLUSTER_ID"])
+}

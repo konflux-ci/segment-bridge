@@ -22,17 +22,6 @@ repos:
   - hooks:
       - id: golangci-lint-full
         args:
-          - --disable-all
           - --verbose
-          - --enable
-          - gofmt
-          - --enable
-          - govet
-          - --enable
-          - ineffassign
-          - --enable
-          - staticcheck
-          - --enable
-          - unused
     repo: https://github.com/golangci/golangci-lint
-    rev: v1.64.5
+    rev: v2.11.4

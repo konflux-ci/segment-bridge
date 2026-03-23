@@ -80,8 +80,6 @@ func runInContainer(scriptPath string, stdin *os.File, env []string, args []stri
 	if effectiveEnv == nil {
 		effectiveEnv = os.Environ()
 	}
-	effectiveEnv = containerTestEnvOverrides(effectiveEnv)
-
 	envFile, err := writeContainerEnvFile(effectiveEnv)
 	if err != nil {
 		return nil, err
@@ -120,19 +118,6 @@ func runInContainer(scriptPath string, stdin *os.File, env []string, args []stri
 		return nil, fmt.Errorf("error executing script in container: %w", err)
 	}
 	return out, nil
-}
-
-// containerTestEnvOverrides clears image defaults that break script tests. The bridge
-// Dockerfile sets CLUSTER_ID=anonymous; get-konflux-public-info.sh only queries
-// kube-system when CLUSTER_ID is unset. If the caller did not set CLUSTER_ID, pass
-// CLUSTER_ID= in the env file so it overrides the image and matches host runs.
-func containerTestEnvOverrides(env []string) []string {
-	if _, has := envSliceToMap(env)["CLUSTER_ID"]; has {
-		return env
-	}
-	out := make([]string, len(env))
-	copy(out, env)
-	return append(out, "CLUSTER_ID=")
 }
 
 func resolveContainerRuntime() (string, error) {

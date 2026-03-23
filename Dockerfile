@@ -81,9 +81,10 @@ ENV TEKTON_RESULTS_API_ADDR="localhost:50051"
 ENV TEKTON_NAMESPACE=""
 ENV TEKTON_LIMIT="100"
 
-# Cluster ID for namespace hashing (anonymization)
-# Should be set by the CronJob/Operator to the cluster's unique ID
-ENV CLUSTER_ID="anonymous"
+# CLUSTER_ID is not set in the image: get-konflux-public-info.sh reads kube-system's
+# metadata.uid when CLUSTER_ID is unset, then exports it for the pipeline. Set
+# CLUSTER_ID in the workload only if you need to override (e.g. non-Kubernetes).
+# tekton-to-segment.sh uses CLUSTER_ID="${CLUSTER_ID:-anonymous}" if still unset.
 
 # Segment configuration
 # URL can point to Segment directly or to a proxy endpoint

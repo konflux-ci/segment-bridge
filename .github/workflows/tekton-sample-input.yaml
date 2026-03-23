@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       # jq 1.7 and yq v4.44.3 (mikefarah/yq) — pin versions so CI matches local
       - name: Install jq
         run: |

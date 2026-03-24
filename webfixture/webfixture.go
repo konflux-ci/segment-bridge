@@ -18,20 +18,29 @@ type RequestTrace struct {
 // made to the web server while the test function is running are then logged
 // and returned.
 func TraceRequestsFrom(test_func func(url string, c *http.Client)) (requests []RequestTrace) {
-	requests_chan := make(chan RequestTrace)
+	requestsChan := make(chan RequestTrace)
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			panic(err)
 		}
-		requests_chan <- RequestTrace{r.Method, r.URL.Path, string(body)}
+		requestsChan <- RequestTrace{r.Method, r.URL.Path, string(body)}
 	}))
-	defer svr.Close()
-	defer close(requests_chan)
+	done := make(chan struct{})
 	go func() {
-		for request := range requests_chan {
+		defer close(done)
+		for request := range requestsChan {
 			requests = append(requests, request)
 		}
+	}()
+	// Shutdown order: stop the server before closing the channel so handlers
+	// cannot send on a closed channel. Runs on normal return, panic, or
+	// runtime.Goexit from test_func.
+	defer func() {
+		svr.Close()
+		svr.CloseClientConnections()
+		close(requestsChan)
+		<-done
 	}()
 	test_func(svr.URL, svr.Client())
 	return

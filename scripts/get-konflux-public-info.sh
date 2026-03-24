@@ -5,6 +5,10 @@
 #   Requires oc or kubectl and jq on PATH, and KUBECONFIG (or default) set.
 #   When both oc and kubectl exist, kubectl is preferred (kwok tests). Set KUBECTL to override.
 #
+#   CLUSTER_ID priority (first match wins, skipped when already set externally):
+#     1. clusterId field in konflux-public-info ConfigMap (operator-provided, e.g. OpenShift ClusterVersion UID)
+#     2. kube-system namespace UID (vanilla K8s fallback)
+#
 set -o pipefail -o errexit -o nounset
 
 if [[ $# -eq 0 ]]; then
@@ -27,7 +31,29 @@ else
 	exit 1
 fi
 
-# Optional: CLUSTER_ID from kube-system (do not override if already set).
+# RBAC: get on configmap/konflux-public-info in namespace konflux-info (granted by Konflux operator).
+# Read the configmap first — it may contain clusterId (operator-provided) as well as version info.
+INFO_JSON=""
+set +e
+INFO_JSON="$($KUBECTL get configmap konflux-public-info -n konflux-info -o json 2>/dev/null | jq -r '.data["info.json"]' 2>/dev/null)"
+_ret=$?
+set -e
+if [[ $_ret -ne 0 ]]; then
+	INFO_JSON=""
+fi
+
+# Prefer clusterId from the configmap (set by the operator on OpenShift clusters).
+if [[ -z "${CLUSTER_ID:-}" && -n "${INFO_JSON:-}" ]]; then
+	set +e
+	_cm_cluster_id="$(printf '%s' "$INFO_JSON" | jq -r '.clusterId // empty' 2>/dev/null)"
+	set -e
+	if [[ -n "${_cm_cluster_id:-}" ]]; then
+		CLUSTER_ID="$_cm_cluster_id"
+		export CLUSTER_ID
+	fi
+fi
+
+# Fallback: CLUSTER_ID from kube-system namespace UID (vanilla K8s or older operators).
 if [[ -z "${CLUSTER_ID:-}" ]]; then
 	set +e
 	CLUSTER_ID="$($KUBECTL get namespace kube-system -o jsonpath='{.metadata.uid}' 2>/dev/null)"
@@ -40,13 +66,8 @@ if [[ -z "${CLUSTER_ID:-}" ]]; then
 	fi
 fi
 
-# RBAC: get on configmap/konflux-public-info in namespace konflux-info (granted by Konflux operator).
-# Optional: KONFLUX_VERSION and KUBERNETES_VERSION from konflux-public-info ConfigMap.
-set +e
-INFO_JSON="$($KUBECTL get configmap konflux-public-info -n konflux-info -o json 2>/dev/null | jq -r '.data["info.json"]' 2>/dev/null)"
-_ret=$?
-set -e
-if [[ $_ret -eq 0 && -n "${INFO_JSON:-}" ]]; then
+# Optional: KONFLUX_VERSION and KUBERNETES_VERSION from the configmap.
+if [[ -n "${INFO_JSON:-}" ]]; then
 	set +e
 	KONFLUX_VERSION="$(printf '%s' "$INFO_JSON" | jq -r '.konfluxVersion' 2>/dev/null)"
 	_jq_ret=$?

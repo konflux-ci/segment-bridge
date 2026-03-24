@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"sort"
 	"strings"
 	"testing"
 
@@ -38,26 +37,34 @@ func TestTektonToSegment(t *testing.T) {
 
 	expectedObjs := parseSegmentEventLines(t, expectedLines)
 	actualObjs := parseSegmentEventLines(t, actualLines)
-	sortSegmentEvents(expectedObjs)
-	sortSegmentEvents(actualObjs)
 
-	for i := 0; i < len(expectedObjs) && i < len(actualObjs); i++ {
-		assert.Equal(t, expectedObjs[i], actualObjs[i], "Event %d mismatch after canonical sort", i+1)
+	actualByMessageID := indexSegmentEventsByMessageID(t, actualObjs)
+	for i, exp := range expectedObjs {
+		mid, ok := messageIDString(exp)
+		require.True(t, ok, "expected line %d: messageId is not a non-empty string", i+1)
+		act, ok := actualByMessageID[mid]
+		require.True(t, ok, "actual output missing messageId %q", mid)
+		assert.Equal(t, exp, act, "Event %q mismatch", mid)
 	}
 }
 
-// segmentEventSortKey orders paired "…-started" before "…-completed" for the same resource
-// (jq versions may emit the two comma-separated outputs in either order).
-func segmentEventSortKey(obj map[string]interface{}) string {
-	mid, _ := obj["messageId"].(string)
-	switch {
-	case strings.HasSuffix(mid, "-started"):
-		return strings.TrimSuffix(mid, "-started") + "\x00\x00"
-	case strings.HasSuffix(mid, "-completed"):
-		return strings.TrimSuffix(mid, "-completed") + "\x00\x01"
-	default:
-		return mid + "\x00\x02"
+func messageIDString(obj map[string]interface{}) (string, bool) {
+	mid, ok := obj["messageId"].(string)
+	return mid, ok && mid != ""
+}
+
+// indexSegmentEventsByMessageID maps messageId -> event. Fails the test if a messageId repeats.
+func indexSegmentEventsByMessageID(t *testing.T, events []map[string]interface{}) map[string]map[string]interface{} {
+	t.Helper()
+	out := make(map[string]map[string]interface{}, len(events))
+	for i, ev := range events {
+		mid, ok := messageIDString(ev)
+		require.True(t, ok, "actual line %d: messageId is not a non-empty string", i+1)
+		_, dup := out[mid]
+		require.False(t, dup, "duplicate messageId in actual output: %q", mid)
+		out[mid] = ev
 	}
+	return out
 }
 
 func parseSegmentEventLines(t *testing.T, lines []string) []map[string]interface{} {
@@ -69,12 +76,6 @@ func parseSegmentEventLines(t *testing.T, lines []string) []map[string]interface
 		out = append(out, obj)
 	}
 	return out
-}
-
-func sortSegmentEvents(events []map[string]interface{}) {
-	sort.SliceStable(events, func(i, j int) bool {
-		return segmentEventSortKey(events[i]) < segmentEventSortKey(events[j])
-	})
 }
 
 // trimNonEmptyLines splits on newlines and returns non-empty trimmed lines.

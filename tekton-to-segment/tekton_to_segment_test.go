@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 
@@ -35,12 +36,45 @@ func TestTektonToSegment(t *testing.T) {
 	assert.Equal(t, len(expectedLines), len(actualLines),
 		"Output line count mismatch: expected %d, got %d", len(expectedLines), len(actualLines))
 
-	for i := 0; i < len(expectedLines) && i < len(actualLines); i++ {
-		var expectedObj, actualObj map[string]interface{}
-		require.NoError(t, json.Unmarshal([]byte(expectedLines[i]), &expectedObj), "Expected line %d is not valid JSON", i+1)
-		require.NoError(t, json.Unmarshal([]byte(actualLines[i]), &actualObj), "Actual line %d is not valid JSON", i+1)
-		assert.Equal(t, expectedObj, actualObj, "Line %d content mismatch", i+1)
+	expectedObjs := parseSegmentEventLines(t, expectedLines)
+	actualObjs := parseSegmentEventLines(t, actualLines)
+	sortSegmentEvents(expectedObjs)
+	sortSegmentEvents(actualObjs)
+
+	for i := 0; i < len(expectedObjs) && i < len(actualObjs); i++ {
+		assert.Equal(t, expectedObjs[i], actualObjs[i], "Event %d mismatch after canonical sort", i+1)
 	}
+}
+
+// segmentEventSortKey orders paired "…-started" before "…-completed" for the same resource
+// (jq versions may emit the two comma-separated outputs in either order).
+func segmentEventSortKey(obj map[string]interface{}) string {
+	mid, _ := obj["messageId"].(string)
+	switch {
+	case strings.HasSuffix(mid, "-started"):
+		return strings.TrimSuffix(mid, "-started") + "\x00\x00"
+	case strings.HasSuffix(mid, "-completed"):
+		return strings.TrimSuffix(mid, "-completed") + "\x00\x01"
+	default:
+		return mid + "\x00\x02"
+	}
+}
+
+func parseSegmentEventLines(t *testing.T, lines []string) []map[string]interface{} {
+	t.Helper()
+	out := make([]map[string]interface{}, 0, len(lines))
+	for i, line := range lines {
+		var obj map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(line), &obj), "line %d is not valid JSON", i+1)
+		out = append(out, obj)
+	}
+	return out
+}
+
+func sortSegmentEvents(events []map[string]interface{}) {
+	sort.SliceStable(events, func(i, j int) bool {
+		return segmentEventSortKey(events[i]) < segmentEventSortKey(events[j])
+	})
 }
 
 // trimNonEmptyLines splits on newlines and returns non-empty trimmed lines.

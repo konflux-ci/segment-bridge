@@ -96,25 +96,53 @@ func runInContainer(scriptPath string, stdin *os.File, env []string, args []stri
 	}
 
 	entry := filepath.Join(containerBinDir, base)
-	runArgs := []string{"run", "--rm", "--env-file", envFile, "--entrypoint", entry}
+	runArgs := []string{"run", "--rm", "--env-file", envFile}
 	if runtime.GOOS == "linux" {
 		runArgs = append(runArgs, "--network", "host")
 	}
+
+	volOpts := "ro"
+	if runtime.GOOS == "linux" {
+		volOpts = "ro,z"
+	}
+
+	stdinMountPath := ""
 	if stdin != nil {
-		runArgs = append(runArgs, "-i")
+		stdinMountPath = regularFilePathForVolume(stdin)
+		if stdinMountPath != "" {
+			runArgs = append(runArgs, "-v", fmt.Sprintf("%s:%s:%s", stdinMountPath, stdinMountPath, volOpts))
+		}
 	}
 
 	for _, vol := range kubeconfigVolumeArgs(effectiveEnv) {
 		runArgs = append(runArgs, vol...)
 	}
 
-	runArgs = append(runArgs, image)
-	runArgs = append(runArgs, args...)
-
-	cmd := exec.Command(runtimePath, runArgs...)
-	if stdin != nil {
-		cmd.Stdin = stdin
+	var cmd *exec.Cmd
+	switch {
+	case stdin != nil && stdinMountPath != "":
+		// Bind-mount the file and redirect on stdin inside the container. Attaching
+		// large stdin to "podman run -i" can drop the tail of the stream on some
+		// runners (e.g. GitHub Actions), yielding short script output.
+		inner := fmt.Sprintf("exec %s%s < %s",
+			quoteSingleForBash(entry),
+			shellArgsQuoted(args),
+			quoteSingleForBash(stdinMountPath))
+		runArgs = append(runArgs, "--entrypoint", "/bin/bash", image, "-c", inner)
+		cmd = exec.Command(runtimePath, runArgs...)
+	default:
+		runArgs = append(runArgs, "--entrypoint", entry)
+		if stdin != nil {
+			runArgs = append(runArgs, "-i")
+		}
+		runArgs = append(runArgs, image)
+		runArgs = append(runArgs, args...)
+		cmd = exec.Command(runtimePath, runArgs...)
+		if stdin != nil {
+			cmd.Stdin = stdin
+		}
 	}
+
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("error executing script in container: %w", err)
@@ -199,6 +227,43 @@ func writeContainerEnvFile(env []string) (path string, err error) {
 		}
 	}
 	return path, nil
+}
+
+// regularFilePathForVolume returns an absolute host path when f refers to a regular file on disk
+// (not a pipe or /proc fd). Used to bind-mount stdin sources into the test container.
+func regularFilePathForVolume(f *os.File) string {
+	st, err := f.Stat()
+	if err != nil || !st.Mode().IsRegular() {
+		return ""
+	}
+	name := f.Name()
+	if name == "" || strings.HasPrefix(name, "/proc/") {
+		return ""
+	}
+	abs, err := filepath.Abs(name)
+	if err != nil {
+		return ""
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return ""
+	}
+	return abs
+}
+
+func quoteSingleForBash(s string) string {
+	return "'" + strings.ReplaceAll(s, `'`, `'\''`) + "'"
+}
+
+func shellArgsQuoted(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, a := range args {
+		b.WriteByte(' ')
+		b.WriteString(quoteSingleForBash(a))
+	}
+	return b.String()
 }
 
 // kubeconfigHostPathForMount returns the absolute path to the kubeconfig file when it exists and is a regular file.

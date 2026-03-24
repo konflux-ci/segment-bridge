@@ -9,3 +9,4 @@ ignore:
   - get-konflux-public-info/sample/
   - fetch-konflux-op-records/sample/
   - fetch-namespace-records/testdata/
+  - fetch-component-records/testdata/

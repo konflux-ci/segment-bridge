@@ -18,6 +18,7 @@ func TestLookPath(t *testing.T) {
 		{"fetch-tekton-records.sh", false},
 		{"fetch-konflux-op-records.sh", false},
 		{"fetch-namespace-records.sh", false},
+		{"fetch-component-records.sh", false},
 		{"get-konflux-public-info.sh", false},
 		{"tekton-to-segment.sh", false},
 		{"segment-mass-uploader.sh", false},

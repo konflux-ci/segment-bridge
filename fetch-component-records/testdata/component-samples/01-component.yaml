@@ -1,0 +1,8 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  name: kwok-test-component
+  namespace: default
+spec:
+  application: kwok-test-app
+  componentName: kwok-test-component

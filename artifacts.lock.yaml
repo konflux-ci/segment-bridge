@@ -3,9 +3,9 @@
 metadata:
   version: "1.0"
 artifacts:
-  - download_url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-amd64-rhel9-4.21.6.tar.gz"
+  - download_url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.21.6/openshift-client-linux-amd64-rhel9.tar.gz"
     checksum: "sha256:b0724e3a4da96e39642d9b191eda711218e6ce5d362d183435cb6cfb9ff5d693"
     filename: "openshift-client-linux-amd64-rhel9.tar.gz"
-  - download_url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-arm64-rhel9-4.21.6.tar.gz"
+  - download_url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.21.6/openshift-client-linux-arm64-rhel9.tar.gz"
     checksum: "sha256:3b0b98238723dc1fc3c29c3ce1cbc23c826f77bcc4f481f3ea6235ddbd4a51bc"
     filename: "openshift-client-linux-arm64-rhel9.tar.gz"

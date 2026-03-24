@@ -65,9 +65,14 @@ jobs:
               rm -f segment-bridge-test-image.tar
             fi
           fi
-          if ! podman image exists segment-bridge:test; then
+          # Partial restore can load an outdated image (primary key mismatch).
+          # Rebuild so segment-bridge:test matches this checkout.
+          cache_hit='${{ steps.cache-bridge-image.outputs.cache-hit }}'
+          if [[ "$cache_hit" != 'true' ]] \
+            || ! podman image exists segment-bridge:test; then
             podman build -v "$(pwd)/deps:/cachi2/output/deps" \
               -t segment-bridge:test .
+            rm -f segment-bridge-test-image.tar
             podman save segment-bridge:test -o segment-bridge-test-image.tar
           fi
       - name: Run GO tests

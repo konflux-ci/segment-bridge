@@ -24,6 +24,7 @@ var bundledScriptBaseNames = map[string]struct{}{
 	"fetch-tekton-records.sh":     {},
 	"fetch-konflux-op-records.sh": {},
 	"fetch-namespace-records.sh":  {},
+	"fetch-component-records.sh":  {},
 	"get-konflux-public-info.sh":  {},
 	"tekton-to-segment.sh":        {},
 	"segment-uploader.sh":         {},
@@ -80,6 +81,7 @@ func runInContainer(scriptPath string, stdin *os.File, env []string, args []stri
 	if effectiveEnv == nil {
 		effectiveEnv = os.Environ()
 	}
+	effectiveEnv = withContainerPathPrefix(effectiveEnv)
 	envFile, err := writeContainerEnvFile(effectiveEnv)
 	if err != nil {
 		return nil, err
@@ -128,6 +130,32 @@ func resolveContainerRuntime() (string, error) {
 		return p, nil
 	}
 	return exec.LookPath("docker")
+}
+
+// withContainerPathPrefix prepends image and standard locations to PATH so scripts find
+// bundled kubectl/oc and /usr/bin/env even when the host PATH omits them (the container
+// filesystem does not mirror the host).
+func withContainerPathPrefix(env []string) []string {
+	const prefix = "/usr/local/bin:/usr/bin:/bin"
+	sep := string(os.PathListSeparator)
+	out := make([]string, 0, len(env)+1)
+	found := false
+	for _, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			v := strings.TrimPrefix(e, "PATH=")
+			if v != "" {
+				e = "PATH=" + prefix + sep + v
+			} else {
+				e = "PATH=" + prefix
+			}
+			found = true
+		}
+		out = append(out, e)
+	}
+	if !found {
+		out = append(out, "PATH="+prefix)
+	}
+	return out
 }
 
 // envSliceToMap parses KEY=value lines; later entries win (same as typical shell export order).
@@ -198,5 +226,10 @@ func kubeconfigVolumeArgs(env []string) [][]string {
 		return nil
 	}
 	// Mount at the same path so kubectl/oc inside the container resolve KUBECONFIG without adjustment.
-	return [][]string{{"-v", fmt.Sprintf("%s:%s:ro", abs, abs)}}
+	// :z relabels for SELinux (e.g. Fedora) so user-namespace containers can read the temp kubeconfig.
+	opts := "ro"
+	if runtime.GOOS == "linux" {
+		opts = "ro,z"
+	}
+	return [][]string{{"-v", fmt.Sprintf("%s:%s:%s", abs, abs, opts)}}
 }

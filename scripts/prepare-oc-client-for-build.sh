@@ -16,12 +16,12 @@ case "$HOST_ARCH" in
 esac
 
 case "$OC_ARCH" in
-  amd64) EXPECTED_SHA="59671f03195c7b7f25c50e71a812791bf54aef424791fba27993c3255d469791" ;;
-  arm64) EXPECTED_SHA="180b80773a0e41c58f5e372c6df2f086edc77b0fb34f36a3a58acf14b59130bc" ;;
+  amd64) EXPECTED_SHA="b0724e3a4da96e39642d9b191eda711218e6ce5d362d183435cb6cfb9ff5d693" ;;
+  arm64) EXPECTED_SHA="3b0b98238723dc1fc3c29c3ce1cbc23c826f77bcc4f481f3ea6235ddbd4a51bc" ;;
 esac
 
 TARBALL_NAME="openshift-client-linux-${OC_ARCH}-rhel9.tar.gz"
-URL="https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-${OC_ARCH}-rhel9-4.21.5.tar.gz"
+URL="https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-${OC_ARCH}-rhel9-4.21.6.tar.gz"
 
 mkdir -p "$OUT_DIR"
 OUT_FILE="$OUT_DIR/$TARBALL_NAME"

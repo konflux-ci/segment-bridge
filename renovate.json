@@ -40,18 +40,6 @@
       "datasourceTemplate": "custom.openshift-mirror-stable-arm64",
       "versioningTemplate": "semver-coerced",
       "autoReplaceStringTemplate": "download_url: \"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-arm64-rhel9-{{{newValue}}}.tar.gz\"\n    checksum: \"sha256:{{{newDigest}}}\""
-    },
-    {
-      "customType": "regex",
-      "description": "OpenShift client (oc) in prepare-oc-client-for-build.sh",
-      "managerFilePatterns": ["scripts/prepare-oc-client-for-build.sh"],
-      "matchStrings": [
-        "URL=\"https://mirror\\.openshift\\.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-amd64-rhel9-(?<currentValue>[\\d.]+)\\.tar\\.gz\"\\s+EXPECTED_SHA=\"(?<currentDigest>[a-f0-9]{64})\""
-      ],
-      "depNameTemplate": "openshift-client-linux-amd64-rhel9",
-      "datasourceTemplate": "custom.openshift-mirror-stable",
-      "versioningTemplate": "semver-coerced",
-      "autoReplaceStringTemplate": "URL=\"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-amd64-rhel9-{{{newValue}}}.tar.gz\"\nEXPECTED_SHA=\"{{{newDigest}}}\""
     }
   ],
   "packageRules": [

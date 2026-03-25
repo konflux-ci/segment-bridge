@@ -49,6 +49,7 @@ jobs:
               hashFiles(
                 'Dockerfile',
                 'go.mod',
+                'LICENSE',
                 'scripts/**/*.sh',
                 'scripts/prepare-oc-client-for-build.sh'
               )

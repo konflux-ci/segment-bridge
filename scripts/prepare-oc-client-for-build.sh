@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUT_DIR="$REPO_ROOT/deps/generic"
+LOCK_FILE="$REPO_ROOT/artifacts.lock.yaml"
 
 HOST_ARCH="$(uname -m)"
 case "$HOST_ARCH" in
@@ -15,13 +16,18 @@ case "$HOST_ARCH" in
   *) echo "Unsupported architecture: $HOST_ARCH" >&2; exit 1 ;;
 esac
 
-case "$OC_ARCH" in
-  amd64) EXPECTED_SHA="b0724e3a4da96e39642d9b191eda711218e6ce5d362d183435cb6cfb9ff5d693" ;;
-  arm64) EXPECTED_SHA="3b0b98238723dc1fc3c29c3ce1cbc23c826f77bcc4f481f3ea6235ddbd4a51bc" ;;
-esac
+# Read URL, checksum, and filename from the lock file (maintained by Renovate)
+URL=$(grep "download_url:.*linux-${OC_ARCH}-rhel9" "$LOCK_FILE" \
+  | sed 's/.*download_url: *"\(.*\)"/\1/')
+EXPECTED_SHA=$(grep -A1 "download_url:.*linux-${OC_ARCH}-rhel9" "$LOCK_FILE" \
+  | grep "checksum:" | sed 's/.*sha256:\([a-f0-9]*\).*/\1/')
+TARBALL_NAME=$(grep -A2 "download_url:.*linux-${OC_ARCH}-rhel9" "$LOCK_FILE" \
+  | grep "filename:" | sed 's/.*filename: *"\(.*\)"/\1/')
 
-TARBALL_NAME="openshift-client-linux-${OC_ARCH}-rhel9.tar.gz"
-URL="https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-${OC_ARCH}-rhel9-4.21.6.tar.gz"
+if [[ -z "$URL" || -z "$EXPECTED_SHA" || -z "$TARBALL_NAME" ]]; then
+  echo "Failed to parse ${OC_ARCH} artifact from $LOCK_FILE" >&2
+  exit 1
+fi
 
 mkdir -p "$OUT_DIR"
 OUT_FILE="$OUT_DIR/$TARBALL_NAME"

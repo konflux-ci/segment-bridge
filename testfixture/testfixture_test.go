@@ -3,6 +3,9 @@ package testfixture
 import (
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func createTempFile(t *testing.T, content string) string {
@@ -40,6 +43,8 @@ func createTempScript(t *testing.T, content string) string {
 }
 
 func TestRunScriptWithInputFile(t *testing.T) {
+	t.Setenv(EnvTestImage, "")
+
 	t.Run("SuccessfulExecution", func(t *testing.T) {
 		inputFilePath := createTempFile(t, "Hello world")
 		defer os.Remove(inputFilePath)
@@ -78,4 +83,27 @@ func TestRunScriptWithInputFile(t *testing.T) {
 			t.Errorf("Expected an error, got none")
 		}
 	})
+}
+
+func TestScriptBundledInBridgeImage(t *testing.T) {
+	assert.True(t, ScriptBundledInBridgeImage("tekton-to-segment.sh"))
+	assert.False(t, ScriptBundledInBridgeImage("not-a-real-script.sh"))
+}
+
+func TestRunRepoScriptContainerModeRejectsUnbundledScript(t *testing.T) {
+	t.Setenv(EnvTestImage, "localhost/segment-bridge:test")
+	t.Setenv(EnvContainerRuntime, "")
+
+	scriptFilePath := createTempScript(t, "#!/bin/sh\necho hi")
+	defer os.Remove(scriptFilePath)
+
+	_, err := RunRepoScript(scriptFilePath, nil, os.Environ())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a script bundled")
+}
+
+func TestEnvSliceToMapLastWins(t *testing.T) {
+	m := envSliceToMap([]string{"A=1", "B=2", "A=3"})
+	assert.Equal(t, "3", m["A"])
+	assert.Equal(t, "2", m["B"])
 }

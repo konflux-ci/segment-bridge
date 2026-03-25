@@ -35,12 +35,47 @@ func TestTektonToSegment(t *testing.T) {
 	assert.Equal(t, len(expectedLines), len(actualLines),
 		"Output line count mismatch: expected %d, got %d", len(expectedLines), len(actualLines))
 
-	for i := 0; i < len(expectedLines) && i < len(actualLines); i++ {
-		var expectedObj, actualObj map[string]interface{}
-		require.NoError(t, json.Unmarshal([]byte(expectedLines[i]), &expectedObj), "Expected line %d is not valid JSON", i+1)
-		require.NoError(t, json.Unmarshal([]byte(actualLines[i]), &actualObj), "Actual line %d is not valid JSON", i+1)
-		assert.Equal(t, expectedObj, actualObj, "Line %d content mismatch", i+1)
+	expectedObjs := parseSegmentEventLines(t, expectedLines)
+	actualObjs := parseSegmentEventLines(t, actualLines)
+
+	actualByMessageID := indexSegmentEventsByMessageID(t, actualObjs)
+	for i, exp := range expectedObjs {
+		mid, ok := messageIDString(exp)
+		require.True(t, ok, "expected line %d: messageId is not a non-empty string", i+1)
+		act, ok := actualByMessageID[mid]
+		require.True(t, ok, "actual output missing messageId %q", mid)
+		assert.Equal(t, exp, act, "Event %q mismatch", mid)
 	}
+}
+
+func messageIDString(obj map[string]interface{}) (string, bool) {
+	mid, ok := obj["messageId"].(string)
+	return mid, ok && mid != ""
+}
+
+// indexSegmentEventsByMessageID maps messageId -> event. Fails the test if a messageId repeats.
+func indexSegmentEventsByMessageID(t *testing.T, events []map[string]interface{}) map[string]map[string]interface{} {
+	t.Helper()
+	out := make(map[string]map[string]interface{}, len(events))
+	for i, ev := range events {
+		mid, ok := messageIDString(ev)
+		require.True(t, ok, "actual line %d: messageId is not a non-empty string", i+1)
+		_, dup := out[mid]
+		require.False(t, dup, "duplicate messageId in actual output: %q", mid)
+		out[mid] = ev
+	}
+	return out
+}
+
+func parseSegmentEventLines(t *testing.T, lines []string) []map[string]interface{} {
+	t.Helper()
+	out := make([]map[string]interface{}, 0, len(lines))
+	for i, line := range lines {
+		var obj map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(line), &obj), "line %d is not valid JSON", i+1)
+		out = append(out, obj)
+	}
+	return out
 }
 
 // trimNonEmptyLines splits on newlines and returns non-empty trimmed lines.

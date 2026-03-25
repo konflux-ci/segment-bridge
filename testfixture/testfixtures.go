@@ -3,7 +3,6 @@ package testfixture
 import (
 	"fmt"
 	"os"
-	"os/exec"
 )
 
 func RunScriptWithInputFile(filePath, scriptPath string) ([]byte, error) {
@@ -13,13 +12,5 @@ func RunScriptWithInputFile(filePath, scriptPath string) ([]byte, error) {
 	}
 	defer file.Close()
 
-	cmd := exec.Command(scriptPath)
-	cmd.Stdin = file
-
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("error executing script: %w", err)
-	}
-
-	return output, nil
+	return RunRepoScript(scriptPath, file, nil)
 }

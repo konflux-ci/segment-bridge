@@ -12,6 +12,8 @@ name: Unit tests
 jobs:
   go-test:
     runs-on: ubuntu-latest
+    env:
+      SEGMENT_BRIDGE_TEST_IMAGE: segment-bridge:test
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -20,6 +22,59 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+      - name: Install Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+      - name: Cache OpenShift client tarball (deps/generic)
+        id: cache-oc-tarball
+        uses: actions/cache@v4
+        with:
+          path: deps/generic
+          key: >-
+            oc-tarball-${{ runner.os }}-${{ runner.arch }}-${{
+              hashFiles('scripts/prepare-oc-client-for-build.sh')
+            }}
+          restore-keys: |
+            oc-tarball-${{ runner.os }}-${{ runner.arch }}-
+      - name: Prepare OpenShift client tarball
+        run: ./scripts/prepare-oc-client-for-build.sh
+      - name: Cache segment-bridge test image tarball
+        id: cache-bridge-image
+        uses: actions/cache@v4
+        with:
+          path: segment-bridge-test-image.tar
+          key: >-
+            segment-bridge-image-${{ runner.os }}-${{ runner.arch }}-${{
+              hashFiles(
+                'Dockerfile',
+                'go.mod',
+                'scripts/**/*.sh',
+                'scripts/prepare-oc-client-for-build.sh'
+              )
+            }}
+          restore-keys: |
+            segment-bridge-image-${{ runner.os }}-${{ runner.arch }}-
+      - name: Load or build segment-bridge test image
+        run: |
+          set -euo pipefail
+          if [[ -f segment-bridge-test-image.tar ]]; then
+            if podman load -i segment-bridge-test-image.tar; then
+              :
+            else
+              rm -f segment-bridge-test-image.tar
+            fi
+          fi
+          # Partial restore can load an outdated image (primary key mismatch).
+          # Rebuild so segment-bridge:test matches this checkout.
+          cache_hit='${{ steps.cache-bridge-image.outputs.cache-hit }}'
+          if [[ "$cache_hit" != 'true' ]] \
+            || ! podman image exists segment-bridge:test; then
+            podman build -v "$(pwd)/deps:/cachi2/output/deps" \
+              -t segment-bridge:test .
+            rm -f segment-bridge-test-image.tar
+            podman save segment-bridge:test -o segment-bridge-test-image.tar
+          fi
       - name: Run GO tests
         run: |
           go test -short -v -coverprofile=coverage.out -covermode=atomic ./...

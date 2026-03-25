@@ -195,11 +195,18 @@ func TestGetKonfluxPublicInfo(t *testing.T) {
 		expectedEnvFile          string
 		missingKonflux           bool // if true, assert no KONFLUX_* vars and CLUSTER_ID from kube-system
 		deleteConfigMapBeforeRun bool // if true, remove configmap before running script (for "missing" case)
+		clusterIdFromConfigMap   bool // if true, CLUSTER_ID comes from info.json clusterId (not kube-system UID)
 	}{
 		{
 			name:            "k8s-konflux-public-info",
 			inputDir:        "sample/input/k8s",
 			expectedEnvFile: "sample/expected/k8s-konflux-public-info.env",
+		},
+		{
+			name:                   "configmap-with-cluster-id",
+			inputDir:               "sample/input/k8s-with-cluster-id",
+			expectedEnvFile:        "sample/expected/k8s-with-cluster-id.env",
+			clusterIdFromConfigMap: true,
 		},
 		{
 			name:                     "missing-konflux-public-info",
@@ -250,8 +257,10 @@ func TestGetKonfluxPublicInfo(t *testing.T) {
 				require.NoError(t, err, "parse expected env file")
 				require.NotEmpty(t, expected, "expected env file must not be empty")
 
-				config := buildRestConfig(t)
-				expected["CLUSTER_ID"] = getKubeSystemUID(t, config)
+				if !tc.clusterIdFromConfigMap {
+					config := buildRestConfig(t)
+					expected["CLUSTER_ID"] = getKubeSystemUID(t, config)
+				}
 
 				for k, want := range expected {
 					got, ok := actual[k]

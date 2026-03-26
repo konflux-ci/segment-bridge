@@ -22,6 +22,7 @@ func TestTektonToSegment(t *testing.T) {
 	require.NoError(t, os.Setenv("CLUSTER_ID", clusterIDEnv), "Failed to set CLUSTER_ID")
 	require.NoError(t, os.Setenv("KONFLUX_VERSION", "1.2.3"), "Failed to set KONFLUX_VERSION")
 	require.NoError(t, os.Setenv("KUBERNETES_VERSION", "1.30"), "Failed to set KUBERNETES_VERSION")
+	require.NoError(t, os.Setenv("HEARTBEAT_TIMESTAMP", "2026-03-04T08:00:00Z"), "Failed to set HEARTBEAT_TIMESTAMP")
 
 	expectedBytes, err := os.ReadFile(expectedPath)
 	require.NoError(t, err, "Failed to read expected output file")

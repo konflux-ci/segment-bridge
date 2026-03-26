@@ -1,0 +1,15 @@
+anonymousId: anonymous
+context:
+  library:
+    name: segment-bridge
+    version: 2.0.0
+  device:
+    id: f069097ced1b
+event: Segment Bridge Heartbeat
+messageId: f069097ced1b-heartbeat-2026-03-04T08:00:00Z
+properties:
+  clusterIdHash: f069097ced1b
+  konfluxVersion: "1.2.3"
+  kubernetesVersion: "1.30"
+timestamp: "2026-03-04T08:00:00Z"
+type: track

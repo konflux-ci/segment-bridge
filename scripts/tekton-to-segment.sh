@@ -375,3 +375,29 @@ while IFS= read -r record; do
   # Transform to Segment events (outputs two lines: Started + Completed)
   transform_record "$record" "$ns_hash" "$cluster_id_hash"
 done
+
+# Emit a heartbeat event so Segment can tell this cluster is alive and
+# segment-bridge is running, even when no real records were processed.
+heartbeat_ts="${HEARTBEAT_TIMESTAMP:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+jq -n -c \
+  --arg cluster_id_hash "$cluster_id_hash" \
+  --arg timestamp "$heartbeat_ts" \
+  --arg konflux_version "${KONFLUX_VERSION:-}" \
+  --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
+  {
+    type: "track",
+    anonymousId: "anonymous",
+    messageId: (if $cluster_id_hash != "" then ($cluster_id_hash + "-heartbeat-" + $timestamp) else ("heartbeat-" + $timestamp) end),
+    timestamp: $timestamp,
+    event: "Segment Bridge Heartbeat",
+    context: (
+      {library: {name: "segment-bridge", version: "2.0.0"}}
+      + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
+    ),
+    properties: (
+      (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end)
+      + (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end)
+      + (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end)
+    )
+  }
+'

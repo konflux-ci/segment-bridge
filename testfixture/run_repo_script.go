@@ -21,6 +21,7 @@ const (
 
 // Basenames of scripts copied into the segment-bridge image (see Dockerfile).
 var bundledScriptBaseNames = map[string]struct{}{
+	"emit-removal-event.sh":       {},
 	"fetch-tekton-records.sh":     {},
 	"fetch-konflux-op-records.sh": {},
 	"fetch-namespace-records.sh":  {},

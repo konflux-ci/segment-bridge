@@ -65,6 +65,7 @@ COPY --from=oc-client /usr/local/bin/oc /usr/local/bin/kubectl /usr/local/bin/
 COPY --from=builder --chown=root:root --chmod=755 /build/tkn-results /usr/local/bin/tkn-results
 
 COPY --chown=root:root --chmod=755 \
+    scripts/emit-removal-event.sh \
     scripts/fetch-tekton-records.sh \
     scripts/fetch-konflux-op-records.sh \
     scripts/fetch-namespace-records.sh \

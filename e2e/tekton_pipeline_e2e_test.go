@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -268,6 +269,11 @@ esac
 	require.NoError(t, os.WriteFile(mockOC, []byte(ocScript), 0755))
 }
 
+func computeNamespaceHash(namespace, clusterID string) string {
+	h := sha256.Sum256([]byte(namespace + ":" + clusterID))
+	return fmt.Sprintf("%x", h)[:12]
+}
+
 type pipelineConfig struct {
 	MockDir          string
 	ServerURL        string
@@ -375,6 +381,27 @@ func runPipeline(t *testing.T, cfg *pipelineConfig) pipelineResult {
 		result.ExitCode = exitErr.ExitCode()
 	}
 	return result
+}
+
+func collectSegmentEvents(t *testing.T, bodies []string) []testfixture.SegmentEvent {
+	t.Helper()
+	var events []testfixture.SegmentEvent
+	for _, body := range bodies {
+		var batch testfixture.SegmentBatch
+		require.NoError(t, json.Unmarshal([]byte(body), &batch),
+			"Failed to decode batch payload")
+		events = append(events, batch.Batch...)
+	}
+	return events
+}
+
+func findEvent(events []testfixture.SegmentEvent, messageID string) *testfixture.SegmentEvent {
+	for i := range events {
+		if events[i].MessageID == messageID {
+			return &events[i]
+		}
+	}
+	return nil
 }
 
 func assertPipelineRunEvents(t *testing.T, events []testfixture.SegmentEvent, pr pipelineRunData, clusterID string) {

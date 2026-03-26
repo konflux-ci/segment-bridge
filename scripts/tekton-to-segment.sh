@@ -92,8 +92,22 @@ transform_konflux_record() {
     --arg cluster_id_hash "$cluster_id_hash" \
     --arg konflux_version "${KONFLUX_VERSION:-}" \
     --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
-    # Ready condition (type=="Ready", status=="True")
+    # Ready condition (type=="Ready", status=="True") for backward compat
     ((.status.conditions // []) | map(select(.type == "Ready" and .status == "True")) | .[0]) as $ready |
+
+    # Ready condition (any status) for install KPI enrichment
+    ((.status.conditions // []) | map(select(.type == "Ready")) | .[0]) as $readyCond |
+    ($readyCond.status // "Unknown") as $readyStatus |
+    ($readyCond.message // "") as $readyMessage |
+    (if $readyStatus == "True" then "success"
+     elif $readyStatus == "False" then "failure"
+     else "in_progress" end) as $installResult |
+
+    # Component status counts
+    (.status.components // []) as $components |
+    ($components | length) as $totalComponents |
+    ($components | map(select(.ready == true)) | length) as $readyComponents |
+    ($components | map(select(.ready != true)) | map(.name) | join(",")) as $failedComponentNames |
 
     (.metadata.creationTimestamp) as $startTime |
     ($ready.lastTransitionTime) as $completionTime |
@@ -128,7 +142,7 @@ transform_konflux_record() {
       namespaceHash: $ns_hash
     } + $clusterProp + $konfluxProp + $k8sProp) as $commonProps |
 
-    # Event 1: Operator Deployment Started
+    # Event 1: Operator Deployment Started (unchanged)
     ($base + {
       messageId: (.metadata.uid + "-started"),
       timestamp: $startTime,
@@ -136,16 +150,22 @@ transform_konflux_record() {
       properties: $commonProps
     }),
 
-    # Event 2: Operator Deployment Completed
+    # Event 2: Operator Deployment Completed (enriched)
     ($base + {
-      messageId: (.metadata.uid + "-completed"),
+      messageId: (.metadata.uid + "-completed-" + $installResult),
       timestamp: $completionTime,
       event: "Operator Deployment Completed",
       properties: ($commonProps + {
         startTime: $startTime,
         completionTime: $completionTime,
         durationSeconds: $duration,
-        status: ($ready.reason // "Unknown")
+        status: ($ready.reason // "Unknown"),
+        installResult: $installResult,
+        readyConditionStatus: $readyStatus,
+        readyConditionMessage: $readyMessage,
+        totalComponents: $totalComponents,
+        readyComponents: $readyComponents,
+        failedComponentNames: $failedComponentNames
       })
     })
   '

@@ -23,15 +23,21 @@ context:
   device:
     id: f069097ced1b
 event: Operator Deployment Completed
-messageId: 8208a728-391e-47da-a461-26e9e6f48ada-completed
+messageId: 8208a728-391e-47da-a461-26e9e6f48ada-completed-success
 properties:
   clusterIdHash: f069097ced1b
   completionTime: "2026-03-03T08:43:48Z"
   durationSeconds: 1188089
+  failedComponentNames: ""
+  installResult: success
   konfluxVersion: "1.2.3"
   kubernetesVersion: "1.30"
   namespaceHash: 44c3473d88ad
+  readyComponents: 13
+  readyConditionMessage: All 13 components are ready
+  readyConditionStatus: "True"
   startTime: "2026-02-17T14:42:19Z"
   status: AllComponentsReady
+  totalComponents: 13
 timestamp: "2026-03-03T08:43:48Z"
 type: track

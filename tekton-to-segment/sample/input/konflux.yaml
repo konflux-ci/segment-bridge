@@ -248,4 +248,31 @@ status:
     reason: AllComponentsReady
     status: "True"
     type: release-service.Ready
+  components:
+  - name: application-api
+    ready: true
+  - name: build-service
+    ready: true
+  - name: cert-manager
+    ready: true
+  - name: default-tenant
+    ready: true
+  - name: enterprise-contract
+    ready: true
+  - name: image-controller
+    ready: true
+  - name: info
+    ready: true
+  - name: integration-service
+    ready: true
+  - name: internal-registry
+    ready: true
+  - name: namespace-lister
+    ready: true
+  - name: rbac
+    ready: true
+  - name: release-service
+    ready: true
+  - name: ui
+    ready: true
   uiURL: https://localhost:9443

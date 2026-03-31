@@ -83,7 +83,7 @@ jobs:
         run: |
           go test -short -v -coverprofile=coverage.out -covermode=atomic ./...
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unit-tests

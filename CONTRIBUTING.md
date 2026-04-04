@@ -129,7 +129,24 @@ Optional: `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` selects `podman` or `docker` w
 both are installed; otherwise `podman` is tried first, then `docker`.
 
 #### Test Coverage
-[TBD]
+Test coverage is automatically collected and reported to Codecov for both
+unit tests and E2E tests.
+
+### E2E Tests
+End-to-end tests validate the complete Tekton-to-Segment pipeline behavior,
+including namespace anonymization, event generation, and batching. These tests
+use the `e2e` build tag and are located in the `tekton-e2e/` directory.
+
+#### Running the E2E Tests Locally
+1. Ensure required tools are installed: `bash`, `curl`, `jq`, `sha256sum`,
+   and GNU `split` (with `--line-bytes` and `--filter` support)
+2. From the repository root, run:
+   ```
+   cd tekton-e2e
+   go test -tags=e2e -v
+   ```
+3. E2E tests are automatically run by CI on all pull requests and pushes to
+   the main branch via the `.github/workflows/e2e_tests.yaml` workflow.
 
 ### Integration Tests
 [TBD]

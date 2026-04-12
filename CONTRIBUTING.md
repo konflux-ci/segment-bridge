@@ -84,9 +84,9 @@ and Segment credentials for upload. Typical variables include
 Kubernetes deployment examples use Kustomize under [`config/`](config/).
 
 ### Unit Tests
-Go unit tests are included in various packages within the repository.
-Go unit tests are located within the tests directory, with filenames ending with
-_tests.go and with .go.
+Go unit tests are colocated with production code in each package
+(e.g. `tekton-to-segment/tekton_to_segment_test.go`,
+`segment/uploader_test.go`). Test filenames end with `_test.go`.
 
 #### Running the Unit Tests Locally
 1. Clone your fork of the project.
@@ -129,13 +129,23 @@ Optional: `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` selects `podman` or `docker` w
 both are installed; otherwise `podman` is tried first, then `docker`.
 
 #### Test Coverage
-[TBD]
+CI generates a coverage profile (`coverage.out`) and uploads it to
+[Codecov](https://about.codecov.io/). The upload is currently
+advisory — it does not block PR merging. To generate a local coverage
+report:
+
+    go test -coverprofile=coverage.out ./...
+    go tool cover -html=coverage.out
 
 ### Integration Tests
-[TBD]
-
-#### Running the Integration Tests
-[TBD]
+Integration testing is performed through Go unit tests using
+`testfixture` to exercise shell scripts. These tests run the
+production scripts inside the container image, validating the full
+fetch → transform → upload pipeline against kwok-simulated cluster
+data. See [Running shell-script tests inside the bridge
+image](#running-shell-script-tests-inside-the-bridge-image-optional)
+above for setup and commands. CI runs this automatically (see the
+`unit_tests.yaml` workflow).
 
 ### Before submitting the PR
 

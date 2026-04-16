@@ -7,8 +7,8 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.35.3
-	k8s.io/apimachinery v0.35.3
+	k8s.io/api v0.35.4
+	k8s.io/apimachinery v0.35.4
 	k8s.io/client-go v0.35.3
 )
 

@@ -33,3 +33,9 @@ deps/
 
 # IDE / editor
 .cursor/plans/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store

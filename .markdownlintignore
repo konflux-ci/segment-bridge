@@ -1,0 +1,13 @@
+# Fixture and sample READMEs intentionally use long lines and table styles
+# that mirror the upstream sources they document. Mirrors the same pattern
+# used in .yamllint.yaml for sample/fixture directories.
+schema/
+tekton-to-segment/sample/
+get-konflux-public-info/sample/
+fetch-konflux-op-records/sample/
+
+# Generated reports
+.agentready/
+
+# Local plans / agent scratch
+.cursor/plans/

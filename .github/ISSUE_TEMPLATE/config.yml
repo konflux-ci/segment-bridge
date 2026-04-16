@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Konflux / RHTAP Jira project
+    url: https://issues.redhat.com/projects/KFLUXVNGD
+    about: >-
+      For internal Red Hat work, please use Jira (KFLUXVNGD-* or
+      RHTAPWATCH-*). GitHub issues here are for external defects and
+      feature requests against the open-source bridge.

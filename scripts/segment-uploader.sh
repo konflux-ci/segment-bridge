@@ -1,6 +1,6 @@
 #!/bin/bash
 # segment-uploader.sh
-#   Get Segemnt event records from STDIN (One per-line) and POST them to the
+#   Get Segment event records from STDIN (One per-line) and POST them to the
 #   Segment batch API. The API is limited to max request size of 500KB, so no
 #   more than that should be sent as input.
 #
@@ -22,7 +22,7 @@ PATH="$SELFDIR:${PATH#"$SELFDIR":}"
 #
 # The Segment API URL to use (can be Segment directly or a proxy endpoint):
 SEGMENT_BATCH_API="${SEGMENT_BATCH_API:-https://api.segment.io/v1/batch}"
-# How many times to rety calling into Segment
+# How many times to retry calling into Segment
 SEGMENT_RETRIES="${SEGMENT_RETRIES:-3}"
 #
 # A .netrc file to load credentials from.

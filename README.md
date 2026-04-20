@@ -54,6 +54,48 @@ Kubernetes manifests live under [`config/`](config/) (Kustomize base). The CronJ
 uses the published image default entrypoint (no `command` override), so the
 Tekton pipeline runs automatically.
 
+### `segment-bridge-config` Secret
+
+The CronJob injects every key from a Secret named `segment-bridge-config`
+as environment variables (`envFrom` / `secretRef`). The Secret is marked
+`optional: true`, so the pod starts even when the Secret is absent — but
+Segment uploads are skipped unless `SEGMENT_WRITE_KEY` is provided.
+
+Create the Secret in the `segment-bridge` namespace:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: segment-bridge-config
+  namespace: segment-bridge
+stringData:
+  SEGMENT_WRITE_KEY: "<your-segment-write-key>"
+  # Add optional keys below as needed.
+```
+
+#### Required keys
+
+| Key | Description |
+|-----|-------------|
+| `SEGMENT_WRITE_KEY` | Segment source write key. `tekton-main-job.sh` converts it into a `.netrc` file for the upload stage. When unset, fetch and transform still run but events are discarded. |
+
+#### Optional keys
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `TEKTON_RESULTS_API_ADDR` | `localhost:50051` | gRPC address of the Tekton Results API. |
+| `TEKTON_RESULTS_TOKEN` | SA token file | Bearer token for the Tekton Results API. Falls back to the projected service-account token at `/var/run/secrets/kubernetes.io/serviceaccount/token`. |
+| `TEKTON_NAMESPACE` | `-` (all) | Kubernetes namespace to query for PipelineRuns. `-` is the Tekton Results wildcard (all namespaces). |
+| `TEKTON_LIMIT` | `100` | Maximum number of Tekton Results records to fetch per run. |
+| `SEGMENT_BATCH_API` | `https://api.segment.io/v1/batch` | Segment batch endpoint URL. Change this when routing through a proxy. |
+| `SEGMENT_RETRIES` | `3` | Number of retry attempts for each batch upload call. |
+| `CURL_NETRC` | auto-generated | Path to a `.netrc` file for upload authentication. Normally auto-generated from `SEGMENT_WRITE_KEY`; set this only when mounting a pre-built `.netrc` (e.g. for proxy auth). |
+| `CLUSTER_ID` | auto-detected | Cluster identifier used for namespace hashing (anonymization). Auto-detected from the `konflux-public-info` ConfigMap or the `kube-system` namespace UID. Override only for non-Kubernetes environments. |
+| `NAMESPACE_RECENT_HOURS` | `4` | Time window (hours) for `fetch-namespace-records.sh`. Only namespaces created or updated within this window are emitted. |
+| `COMPONENT_RECENT_HOURS` | `4` | Time window (hours) for `fetch-component-records.sh`. Only Components created or updated within this window are emitted. |
+| `KUBECTL` | auto-detect | Override the Kubernetes CLI binary (`kubectl` or `oc`). When unset, scripts prefer `kubectl` if available. |
+
 [1]: https://app.segment.com
 
 Segment has a [built-in mechanism for removing duplicate events][ES1]. This

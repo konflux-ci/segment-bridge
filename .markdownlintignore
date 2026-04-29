@@ -9,5 +9,5 @@ fetch-konflux-op-records/sample/
 # Generated reports
 .agentready/
 
-# Local plans / agent scratch
-.cursor/plans/
+# Local Cursor/agent paths (mirrors pre-commit markdownlint hook exclude).
+.cursor/

@@ -1,4 +1,4 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
   - name: Konflux / RHTAP Jira project
     url: https://issues.redhat.com/projects/KFLUXVNGD

@@ -9,8 +9,13 @@ This document provides guidelines for contributing to this repository.
 * Basic tools: `curl`, `jq`, `oc`
 * Go: version in [`go.mod`](go.mod) (see also [`mise.toml`](mise.toml) for a pinned toolchain via [mise](https://mise.jdx.dev/))
 * Container engine: `podman`
-* **macOS:** You need GNU coreutils **`split`** on your `PATH`, not the BSD `split` macOS ships. Install [GNU coreutils](https://www.gnu.org/software/coreutils/) (for example `brew install coreutils`).
-  * **Why:** The uploader script and tests in [`segment/uploader_test.go`](segment/uploader_test.go) rely on GNU-only flags (`--line-bytes`, `--filter`).
+* **macOS:** You need GNU coreutils **`split`** on your `PATH`,
+  not the BSD `split` macOS ships.
+  Install [GNU coreutils](https://www.gnu.org/software/coreutils/)
+  (for example `brew install coreutils`).
+  * **Why:** The uploader script and tests in
+    [`segment/uploader_test.go`](segment/uploader_test.go)
+    rely on GNU-only flags (`--line-bytes`, `--filter`).
   * **PATH:** Prepend Homebrew's GNU bin directory so `split` resolves to GNU `split`:
     * Apple Silicon: `export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"`
     * Intel Homebrew: `export PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"`

@@ -6,8 +6,11 @@ tekton-to-segment/sample/
 get-konflux-public-info/sample/
 fetch-konflux-op-records/sample/
 
+# Agent skill files use long descriptive lines optimized for AI consumption.
+skills/
+
 # Generated reports
 .agentready/
 
-# Local plans / agent scratch
-.cursor/plans/
+# Local Cursor/agent paths (mirrors pre-commit markdownlint hook exclude).
+.cursor/

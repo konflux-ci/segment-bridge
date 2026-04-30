@@ -29,7 +29,7 @@ func LookPath(file string) (string, error) {
 	return exec.LookPath(file)
 }
 
-// Push the given directory in front of $PATH unless its already listed there
+// Push the given directory in front of $PATH unless it's already listed there
 func pushToPath(dir string) error {
 	osPath := os.Getenv("PATH")
 	osPathList := filepath.SplitList(osPath)

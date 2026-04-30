@@ -79,7 +79,7 @@ jobs:
             rm -f segment-bridge-test-image.tar
             podman save segment-bridge:test -o segment-bridge-test-image.tar
           fi
-      - name: Run GO tests
+      - name: Run Go tests
         run: |
           go test -short -v -coverprofile=coverage.out -covermode=atomic ./...
       - name: Upload coverage reports to Codecov

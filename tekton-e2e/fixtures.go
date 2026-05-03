@@ -3,6 +3,7 @@ package tektone2e
 import (
 	"encoding/base64"
 	"encoding/json"
+	"strconv"
 	"time"
 )
 
@@ -112,12 +113,9 @@ func (pr *PipelineRun) WithChildReferences(count int) *PipelineRun {
 	return pr
 }
 
-// formatIndex converts an integer to a string for naming
+// formatIndex converts an integer to a decimal string for naming fixtures.
 func formatIndex(i int) string {
-	if i < 10 {
-		return string(rune('0' + i))
-	}
-	return string(rune('a' + i - 10))
+	return strconv.Itoa(i)
 }
 
 // NewTaskRun creates a TaskRun

@@ -1,36 +1,26 @@
 //go:build e2e
 
+// Package tektone2e contains end-to-end tests for the Tekton-to-Segment
+// pipeline. Tests validate the complete pipeline behavior — namespace
+// anonymization, event generation, batch splitting, KPI events, and error
+// handling — using mock Tekton Results API responses and a configurable
+// mock oc/kubectl binary.
 package tektone2e
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/redhat-appstudio/segment-bridge.git/scripts"
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/redhat-appstudio/segment-bridge.git/webfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// SegmentEvent represents a Segment track event
-type SegmentEvent struct {
-	Type        string                 `json:"type"`
-	AnonymousID string                 `json:"anonymousId"`
-	MessageID   string                 `json:"messageId"`
-	Timestamp   string                 `json:"timestamp"`
-	Event       string                 `json:"event"`
-	Properties  map[string]interface{} `json:"properties"`
-	Context     map[string]interface{} `json:"context"`
-}
-
-// SegmentBatch represents a Segment batch API request
-type SegmentBatch struct {
-	Batch []SegmentEvent `json:"batch"`
-}
 
 // testEnv holds the test environment setup
 type testEnv struct {
@@ -109,11 +99,12 @@ func (e *testEnv) buildPipelineCommand(envVars map[string]string) (*exec.Cmd, er
 	return cmd, nil
 }
 
-// runPipeline executes the full Tekton pipeline and returns captured Segment requests
+// runPipeline executes the full Tekton pipeline and returns captured Segment requests.
+// The returned error is the pipeline's exit error (nil on success).
 func (e *testEnv) runPipeline(envVars map[string]string) ([]webfixture.RequestTrace, error) {
-	var requests []webfixture.RequestTrace
+	var pipelineErr error
 
-	requests = webfixture.TraceRequestsFrom(func(url string, _ *http.Client) {
+	requests := webfixture.TraceRequestsFrom(func(url string, _ *http.Client) {
 		envWithSegment := make(map[string]string)
 		for k, v := range envVars {
 			envWithSegment[k] = v
@@ -128,12 +119,12 @@ func (e *testEnv) runPipeline(envVars map[string]string) ([]webfixture.RequestTr
 
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			e.t.Logf("Pipeline output: %s", output)
-			e.t.Logf("Pipeline error: %v", err)
+			e.t.Logf("Pipeline output: %s", string(output))
 		}
+		pipelineErr = err
 	})
 
-	return requests, nil
+	return requests, pipelineErr
 }
 
 // runPipelineExpectError executes the pipeline expecting it to fail
@@ -217,8 +208,7 @@ func TestHappyPath(t *testing.T) {
 		assert.Equal(t, "/v1/batch", req.Path)
 	}
 
-	allEvents, err := collectEvents(requests)
-	require.NoError(t, err, "Failed to collect events")
+	allEvents := collectEvents(t, requests)
 
 	// Should have 9 events:
 	// - 6 from PipelineRuns (2 per PipelineRun: Started + Completed)
@@ -289,8 +279,7 @@ func TestEmptyPipeline(t *testing.T) {
 
 	require.Greater(t, len(requests), 0, "Expected at least one request for Konflux operator events")
 
-	allEvents, err := collectEvents(requests)
-	require.NoError(t, err)
+	allEvents := collectEvents(t, requests)
 
 	assert.Equal(t, 3, len(allEvents), "Expected 3 events (2 from Konflux operator + 1 heartbeat)")
 	operatorEvents := filterEvents(allEvents, "Operator Deployment Started")
@@ -321,14 +310,15 @@ func TestDefaultTektonNamespace(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, len(requests), 0, "Expected at least one Segment API request")
 
-	allEvents, err := collectEvents(requests)
-	require.NoError(t, err)
+	allEvents := collectEvents(t, requests)
 
 	pipelineEvents := filterEvents(allEvents, "PipelineRun Started")
 	assert.Equal(t, 1, len(pipelineEvents), "Should have 1 PipelineRun Started event")
 }
 
-// TestMissingAuthToken tests that pipeline continues despite missing authentication token
+// TestMissingAuthToken tests pipeline behavior when auth token is missing.
+// The pipeline uses `set +e`, so fetch-tekton-records fails but the overall
+// script continues; operator and heartbeat events are still emitted.
 // The pipeline uses 'set +e' so fetch-tekton-records.sh can fail gracefully while
 // other data sources (operator, namespace, component records) still succeed
 func TestMissingAuthToken(t *testing.T) {
@@ -346,8 +336,7 @@ func TestMissingAuthToken(t *testing.T) {
 	})
 	require.NoError(t, err, "Pipeline should continue despite missing token")
 
-	allEvents, err := collectEvents(requests)
-	require.NoError(t, err)
+	allEvents := collectEvents(t, requests)
 
 	// Should have 3 events (no PipelineRuns due to auth failure):
 	// - 2 from Konflux operator
@@ -389,8 +378,7 @@ func TestTaskRunFiltering(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	allEvents, err := collectEvents(requests)
-	require.NoError(t, err)
+	allEvents := collectEvents(t, requests)
 
 	// Should have 5 events:
 	// - 2 from 1 PipelineRun (TaskRuns filtered out)
@@ -425,26 +413,26 @@ func TestBatchSplitting(t *testing.T) {
 	env.setMockResponse(response)
 	env.createDefaultNetrc()
 
+	const testBatchSizeLimit = 5000 // small enough to force splitting across 20 runs
 	requests, err := env.runPipeline(map[string]string{
 		"TEKTON_NAMESPACE":        "test-namespace",
 		"TEKTON_RESULTS_TOKEN":    "fake-token",
 		"CLUSTER_ID":              "test-cluster-123",
 		"SEGMENT_WRITE_KEY":       "fake-write-key",
 		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
-		"SEGMENT_BATCH_DATA_SIZE": "5000", // Small batch size to force splitting
+		"SEGMENT_BATCH_DATA_SIZE": strconv.Itoa(testBatchSizeLimit),
 	})
 	require.NoError(t, err)
 
 	assert.Greater(t, len(requests), 1, "Expected multiple batches for large dataset")
 
 	for _, req := range requests {
-		assert.LessOrEqual(t, len(req.Body), 5000, "Each batch should be within size limit")
+		assert.LessOrEqual(t, len(req.Body), testBatchSizeLimit, "Each batch should be within size limit")
 	}
 
-	allEvents, err := collectEvents(requests)
-	require.NoError(t, err)
+	allEvents := collectEvents(t, requests)
 
-	// Should have 43 events total (40 from PipelineRuns + 2 from Konflux operator + 1 heartbeat)
+	// 40 from PipelineRuns (2 per run × 20 runs) + 2 from Konflux operator + 1 heartbeat
 	assert.Equal(t, 43, len(allEvents), "All events should be delivered across batches")
 
 	pipelineEvents := filterEvents(allEvents, "PipelineRun Started")
@@ -481,8 +469,23 @@ func TestNamespaceAnonymization(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	allEvents, err := collectEvents(requests)
-	require.NoError(t, err)
+	const clusterID = "test-cluster-456"
+	// Literal SHA256("namespace-alpha:test-cluster-456")[:12] and
+	// SHA256("namespace-beta:test-cluster-456")[:12].
+	// Using literals (not testfixture.ComputeNamespaceHash) so that a change
+	// to the hashing algorithm is caught even if the test helper is updated
+	// at the same time.
+	const wantAlphaHash = "552b8f46a651"
+	const wantBetaHash = "c5f05982e046"
+	// Cross-check: verify the constants match the current algorithm at test
+	// time, making them self-documenting and easy to update.
+	require.Equal(t, wantAlphaHash, testfixture.ComputeNamespaceHash("namespace-alpha", clusterID),
+		"wantAlphaHash literal is out of date — recompute with sha256sum")
+	require.Equal(t, wantBetaHash, testfixture.ComputeNamespaceHash("namespace-beta", clusterID),
+		"wantBetaHash literal is out of date — recompute with sha256sum")
+	wantClusterIDHash := testfixture.ComputeClusterIDHash(clusterID)
+
+	allEvents := collectEvents(t, requests)
 
 	for _, req := range requests {
 		assert.NotContains(t, req.Body, "namespace-alpha",
@@ -501,41 +504,38 @@ func TestNamespaceAnonymization(t *testing.T) {
 		if hash, ok := event.Properties["namespaceHash"].(string); ok {
 			namespaceHashes[hash]++
 		}
+		// clusterIdHash must be present and correct on every pipeline event
+		assert.Equal(t, wantClusterIDHash, event.Properties["clusterIdHash"],
+			"clusterIdHash must match SHA256(clusterID)[:12]")
 	}
 
-	// Should have 2 unique hashes (one for each namespace)
+	// Should have exactly 2 unique hashes (one for each namespace)
 	assert.Equal(t, 2, len(namespaceHashes), "Should have 2 unique namespace hashes")
 
-	// namespace-alpha has 2 PipelineRuns (4 events), namespace-beta has 1 PipelineRun (2 events)
-	var hashCounts []int
-	for _, count := range namespaceHashes {
-		hashCounts = append(hashCounts, count)
-	}
-	assert.Contains(t, hashCounts, 4, "namespace-alpha should have 4 events")
-	assert.Contains(t, hashCounts, 2, "namespace-beta should have 2 events")
+	// Assert specific precomputed values so a hash-algorithm change is caught
+	assert.Equal(t, 4, namespaceHashes[wantAlphaHash],
+		"namespace-alpha (2 runs × 2 events) should map to the correct SHA256 hash")
+	assert.Equal(t, 2, namespaceHashes[wantBetaHash],
+		"namespace-beta (1 run × 2 events) should map to the correct SHA256 hash")
 
-	// Verify hashes are 12 characters (truncated SHA256)
-	for hash := range namespaceHashes {
-		assert.Equal(t, 12, len(hash), "Namespace hash should be 12 characters")
-	}
+	// Sanity-check length (12 hex chars from SHA256 truncation)
+	assert.Equal(t, 12, len(wantAlphaHash), "Namespace hash should be 12 characters")
+	assert.Equal(t, 12, len(wantBetaHash), "Namespace hash should be 12 characters")
 }
 
 // Helper functions
 
-func collectEvents(requests []webfixture.RequestTrace) ([]SegmentEvent, error) {
-	var allEvents []SegmentEvent
-	for _, req := range requests {
-		var batch SegmentBatch
-		if err := json.Unmarshal([]byte(req.Body), &batch); err != nil {
-			return nil, err
-		}
-		allEvents = append(allEvents, batch.Batch...)
+func collectEvents(t *testing.T, requests []webfixture.RequestTrace) []testfixture.SegmentEvent {
+	t.Helper()
+	bodies := make([]string, len(requests))
+	for i, req := range requests {
+		bodies[i] = req.Body
 	}
-	return allEvents, nil
+	return testfixture.CollectSegmentEventsFromBodies(t, bodies)
 }
 
-func filterEvents(events []SegmentEvent, eventName string) []SegmentEvent {
-	var filtered []SegmentEvent
+func filterEvents(events []testfixture.SegmentEvent, eventName string) []testfixture.SegmentEvent {
+	var filtered []testfixture.SegmentEvent
 	for _, e := range events {
 		if e.Event == eventName {
 			filtered = append(filtered, e)
@@ -544,7 +544,7 @@ func filterEvents(events []SegmentEvent, eventName string) []SegmentEvent {
 	return filtered
 }
 
-func extractStatuses(events []SegmentEvent) []string {
+func extractStatuses(events []testfixture.SegmentEvent) []string {
 	var statuses []string
 	for _, e := range events {
 		if status, ok := e.Properties["status"].(string); ok {

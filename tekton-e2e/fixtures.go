@@ -3,6 +3,7 @@ package tektone2e
 import (
 	"encoding/base64"
 	"encoding/json"
+	"strconv"
 	"time"
 )
 
@@ -106,18 +107,10 @@ func (pr *PipelineRun) WithChildReferences(count int) *PipelineRun {
 		Type string `json:"type"`
 	}, count)
 	for i := 0; i < count; i++ {
-		pr.Status.ChildReferences[i].Name = pr.Metadata.Name + "-task-" + formatIndex(i)
+		pr.Status.ChildReferences[i].Name = pr.Metadata.Name + "-task-" + strconv.Itoa(i)
 		pr.Status.ChildReferences[i].Type = "TaskRun"
 	}
 	return pr
-}
-
-// formatIndex converts an integer to a string for naming
-func formatIndex(i int) string {
-	if i < 10 {
-		return string(rune('0' + i))
-	}
-	return string(rune('a' + i - 10))
 }
 
 // NewTaskRun creates a TaskRun

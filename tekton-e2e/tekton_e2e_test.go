@@ -8,6 +8,7 @@
 package tektone2e
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"os/exec"
@@ -31,7 +32,115 @@ type testEnv struct {
 	netrcFile      string
 }
 
-// setupTestEnv creates a test environment with mock binaries
+// mockOCConfig customises the mock oc/kubectl binary written by configureMockOC.
+// The zero value produces an empty Konflux CR ({}) and empty tenant/component lists,
+// matching the same default as the e2e/ suite.
+type mockOCConfig struct {
+	// PublicInfoInner is the JSON object stored in info.json of the
+	// konflux-public-info ConfigMap. Defaults to test version strings.
+	PublicInfoInner string
+	// KubeSystemUID, if set, is returned as the kube-system namespace UID
+	// instead of $CLUSTER_ID.
+	KubeSystemUID string
+	// EmptyKubeSystemUID writes an empty kube-system UID file, simulating a
+	// missing cluster identity when CLUSTER_ID is also unset.
+	EmptyKubeSystemUID bool
+	// KonfluxCRJSON is the raw JSON returned for `oc get konfluxes`. Defaults
+	// to "{}" (no operator deployment events).
+	KonfluxCRJSON string
+	// NamespacesJSON is the raw JSON returned for tenant namespace listings.
+	// Defaults to {"items":[]}.
+	NamespacesJSON string
+	// ComponentsJSON is the raw JSON returned for Component listings.
+	// Defaults to {"items":[]}.
+	ComponentsJSON string
+	// FailKonfluxGet makes the Konflux CR fetch exit 1, simulating a
+	// fetch-konflux-op-records failure.
+	FailKonfluxGet bool
+}
+
+// configureMockOC writes the mock oc/kubectl script and supporting config files
+// into the test's temporary directory. Must be called before runPipeline.
+func (e *testEnv) configureMockOC(cfg mockOCConfig) {
+	e.t.Helper()
+
+	inner := cfg.PublicInfoInner
+	if inner == "" {
+		inner = `{"konfluxVersion":"test","kubernetesVersion":"test"}`
+	}
+	cmJSON, err := json.Marshal(map[string]map[string]string{
+		"data": {"info.json": inner},
+	})
+	require.NoError(e.t, err)
+	require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "configmap-konflux-public-info.json"), cmJSON, 0600))
+
+	konfluxCR := cfg.KonfluxCRJSON
+	if konfluxCR == "" {
+		konfluxCR = "{}"
+	}
+	require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "konflux-cr.json"), []byte(konfluxCR), 0600))
+
+	nsList := cfg.NamespacesJSON
+	if nsList == "" {
+		nsList = `{"items":[]}`
+	}
+	require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "namespaces.json"), []byte(nsList), 0600))
+
+	compList := cfg.ComponentsJSON
+	if compList == "" {
+		compList = `{"items":[]}`
+	}
+	require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "components.json"), []byte(compList), 0600))
+
+	switch {
+	case cfg.EmptyKubeSystemUID:
+		require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "kube-system-uid"), []byte{}, 0600))
+	case cfg.KubeSystemUID != "":
+		require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "kube-system-uid"), []byte(cfg.KubeSystemUID), 0600))
+	}
+
+	if cfg.FailKonfluxGet {
+		require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "FAIL_KONFLUX"), []byte("1"), 0600))
+	}
+
+	ocScript := `#!/usr/bin/env bash
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+case "$*" in
+  *"get namespace kube-system"*)
+    if [[ -f "$DIR/kube-system-uid" ]]; then
+      cat "$DIR/kube-system-uid"
+    else
+      printf '%s' "${CLUSTER_ID:-}"
+    fi
+    ;;
+  *"get configmap konflux-public-info"*)
+    cat "$DIR/configmap-konflux-public-info.json"
+    ;;
+  *"get"*"konfluxes"*)
+    if [[ -f "$DIR/FAIL_KONFLUX" ]]; then
+      echo "mock oc: simulated konflux operator fetch failure" >&2
+      exit 1
+    fi
+    cat "$DIR/konflux-cr.json"
+    ;;
+  *"get ns"*)
+    cat "$DIR/namespaces.json"
+    ;;
+  *"get components.appstudio.redhat.com"*)
+    cat "$DIR/components.json"
+    ;;
+  *)
+    echo "mock oc: unexpected: $*" >&2
+    exit 1
+    ;;
+esac
+`
+	require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "oc"), []byte(ocScript), 0755))
+	require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "kubectl"), []byte(ocScript), 0755))
+}
+
+// setupTestEnv creates a test environment with the mock tkn-results binary.
+// Call configureMockOC before running the pipeline to set up the oc/kubectl mock.
 func setupTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
@@ -42,27 +151,16 @@ func setupTestEnv(t *testing.T) *testEnv {
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "Failed to build mock tkn-results: %s", output)
 
-	mockOC := filepath.Join(tempDir, "oc")
-	ocScriptPath := "./mock-tkn-results/oc.sh"
-	ocScript, err := os.ReadFile(ocScriptPath)
-	require.NoError(t, err, "Failed to read oc.sh template")
-	require.NoError(t, os.WriteFile(mockOC, ocScript, 0755), "Failed to write mock oc")
-
-	mockKubectl := filepath.Join(tempDir, "kubectl")
-	require.NoError(t, os.WriteFile(mockKubectl, ocScript, 0755), "Failed to write mock kubectl")
-
 	responseFile := filepath.Join(tempDir, "response.json")
 	netrcFile := filepath.Join(tempDir, "netrc")
 
-	env := &testEnv{
+	return &testEnv{
 		t:              t,
 		tempDir:        tempDir,
 		mockTknResults: mockTknResults,
 		responseFile:   responseFile,
 		netrcFile:      netrcFile,
 	}
-
-	return env
 }
 
 // setMockResponse writes a Tekton Results API response to the mock response file
@@ -192,6 +290,7 @@ func TestHappyPath(t *testing.T) {
 	require.NoError(t, err)
 	env.setMockResponse(response)
 	env.createDefaultNetrc()
+	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
 		"TEKTON_NAMESPACE":        "test-namespace",
@@ -210,11 +309,8 @@ func TestHappyPath(t *testing.T) {
 
 	allEvents := collectEvents(t, requests)
 
-	// Should have 9 events:
-	// - 6 from PipelineRuns (2 per PipelineRun: Started + Completed)
-	// - 2 from Konflux operator (Operator Deployment Started + Completed)
-	// - 1 Segment Bridge Heartbeat
-	assert.Equal(t, 9, len(allEvents), "Expected 9 events (6 from PipelineRuns + 2 from Konflux operator + 1 heartbeat)")
+	// 6 from PipelineRuns (2 per PipelineRun: Started + Completed) + 1 heartbeat
+	assert.Equal(t, 7, len(allEvents), "Expected 7 events (6 from PipelineRuns + 1 heartbeat)")
 
 	// Verify event structure
 	for _, event := range allEvents {
@@ -224,7 +320,6 @@ func TestHappyPath(t *testing.T) {
 		assert.NotEmpty(t, event.Timestamp)
 		assert.Contains(t, []string{
 			"PipelineRun Started", "PipelineRun Completed",
-			"Operator Deployment Started", "Operator Deployment Completed",
 			"Segment Bridge Heartbeat",
 		}, event.Event)
 		assert.NotNil(t, event.Properties)
@@ -250,11 +345,6 @@ func TestHappyPath(t *testing.T) {
 	statuses := extractStatuses(pipelineCompletedEvents)
 	assert.Contains(t, statuses, "Succeeded")
 	assert.Contains(t, statuses, "Failed")
-
-	operatorStartedEvents := filterEvents(allEvents, "Operator Deployment Started")
-	operatorCompletedEvents := filterEvents(allEvents, "Operator Deployment Completed")
-	assert.Equal(t, 1, len(operatorStartedEvents), "Expected 1 Operator Deployment Started event")
-	assert.Equal(t, 1, len(operatorCompletedEvents), "Expected 1 Operator Deployment Completed event")
 }
 
 // TestEmptyPipeline tests pipeline with no PipelineRuns
@@ -266,6 +356,7 @@ func TestEmptyPipeline(t *testing.T) {
 	require.NoError(t, err)
 	env.setMockResponse(response)
 	env.createDefaultNetrc()
+	env.configureMockOC(mockOCConfig{})
 
 	// Run pipeline
 	requests, err := env.runPipeline(map[string]string{
@@ -277,13 +368,12 @@ func TestEmptyPipeline(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Greater(t, len(requests), 0, "Expected at least one request for Konflux operator events")
+	require.Greater(t, len(requests), 0, "Expected at least one Segment API request")
 
 	allEvents := collectEvents(t, requests)
 
-	assert.Equal(t, 3, len(allEvents), "Expected 3 events (2 from Konflux operator + 1 heartbeat)")
-	operatorEvents := filterEvents(allEvents, "Operator Deployment Started")
-	assert.Equal(t, 1, len(operatorEvents), "Should have Operator Deployment Started event")
+	assert.Equal(t, 1, len(allEvents), "Expected 1 event (heartbeat only)")
+	testfixture.AssertSegmentHeartbeat(t, allEvents[0])
 }
 
 // TestDefaultTektonNamespace tests that pipeline uses default TEKTON_NAMESPACE
@@ -300,6 +390,7 @@ func TestDefaultTektonNamespace(t *testing.T) {
 	require.NoError(t, err)
 	env.setMockResponse(response)
 	env.createDefaultNetrc()
+	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
 		"TEKTON_RESULTS_TOKEN":    "fake-token",
@@ -325,6 +416,7 @@ func TestMissingAuthToken(t *testing.T) {
 	requireTools(t)
 	env := setupTestEnv(t)
 	env.createDefaultNetrc()
+	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
 		"TEKTON_NAMESPACE": "test-namespace",
@@ -338,10 +430,9 @@ func TestMissingAuthToken(t *testing.T) {
 
 	allEvents := collectEvents(t, requests)
 
-	// Should have 3 events (no PipelineRuns due to auth failure):
-	// - 2 from Konflux operator
-	// - 1 Segment Bridge Heartbeat
-	assert.Equal(t, 3, len(allEvents), "Expected 3 events (2 from operator + 1 heartbeat, no PipelineRuns)")
+	// Only the heartbeat is emitted (no PipelineRuns due to auth failure,
+	// no operator events since the default Konflux CR is {}).
+	assert.Equal(t, 1, len(allEvents), "Expected 1 event (heartbeat only)")
 
 	// Verify no PipelineRun events were emitted
 	pipelineEvents := filterEvents(allEvents, "PipelineRun Started")
@@ -368,6 +459,7 @@ func TestTaskRunFiltering(t *testing.T) {
 	require.NoError(t, err)
 	env.setMockResponse(response)
 	env.createDefaultNetrc()
+	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
 		"TEKTON_NAMESPACE":        "test-namespace",
@@ -380,11 +472,8 @@ func TestTaskRunFiltering(t *testing.T) {
 
 	allEvents := collectEvents(t, requests)
 
-	// Should have 5 events:
-	// - 2 from 1 PipelineRun (TaskRuns filtered out)
-	// - 2 from Konflux operator
-	// - 1 Segment Bridge Heartbeat
-	assert.Equal(t, 5, len(allEvents), "Expected 5 events (2 from PipelineRun + 2 from operator + 1 heartbeat)")
+	// 2 from the 1 PipelineRun (TaskRuns filtered out) + 1 heartbeat
+	assert.Equal(t, 3, len(allEvents), "Expected 3 events (2 from PipelineRun + 1 heartbeat)")
 
 	pipelineEvents := filterEvents(allEvents, "PipelineRun Started")
 	assert.Equal(t, 1, len(pipelineEvents), "Should have 1 PipelineRun Started event")
@@ -412,6 +501,7 @@ func TestBatchSplitting(t *testing.T) {
 	require.NoError(t, err)
 	env.setMockResponse(response)
 	env.createDefaultNetrc()
+	env.configureMockOC(mockOCConfig{})
 
 	const testBatchSizeLimit = 5000 // small enough to force splitting across 20 runs
 	requests, err := env.runPipeline(map[string]string{
@@ -432,8 +522,8 @@ func TestBatchSplitting(t *testing.T) {
 
 	allEvents := collectEvents(t, requests)
 
-	// 40 from PipelineRuns (2 per run × 20 runs) + 2 from Konflux operator + 1 heartbeat
-	assert.Equal(t, 43, len(allEvents), "All events should be delivered across batches")
+	// 40 from PipelineRuns (2 per run × 20 runs) + 1 heartbeat
+	assert.Equal(t, 41, len(allEvents), "All events should be delivered across batches")
 
 	pipelineEvents := filterEvents(allEvents, "PipelineRun Started")
 	assert.Equal(t, 20, len(pipelineEvents), "Should have 20 PipelineRun Started events")
@@ -459,6 +549,7 @@ func TestNamespaceAnonymization(t *testing.T) {
 	require.NoError(t, err)
 	env.setMockResponse(response)
 	env.createDefaultNetrc()
+	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
 		"TEKTON_NAMESPACE":        "test-namespace",

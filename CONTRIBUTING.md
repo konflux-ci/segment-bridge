@@ -141,7 +141,23 @@ advisory — it does not block PR merging. To generate a local coverage
 report:
 
     go test -coverprofile=coverage.out ./...
-    go tool cover -html=coverage.out
+    go tool cover -html=coverage.out 
+
+### E2E Tests
+End-to-end tests validate the complete Tekton-to-Segment pipeline behavior,
+including namespace anonymization, event generation, and batching. These tests
+use the `e2e` build tag and are located in the `tekton-e2e/` directory.
+
+#### Running the E2E Tests Locally
+1. Ensure required tools are installed: `bash`, `curl`, `jq`, `sha256sum`,
+   and GNU `split` (with `--line-bytes` and `--filter` support)
+2. From the repository root, run:
+   ```
+   cd tekton-e2e
+   go test -tags=e2e -v
+   ```
+3. E2E tests are automatically run by CI on all pull requests and pushes to
+   the main branch via the `.github/workflows/e2e_tests.yaml` workflow.
 
 ### Integration Tests
 Integration testing is performed through Go unit tests using

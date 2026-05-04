@@ -16,6 +16,24 @@ repos:
     repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
   - hooks:
+      # Conventional Commits structural check; complements gitlint.
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: []
+    repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+  - hooks:
+      - id: actionlint
+    repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+  - hooks:
+      - id: markdownlint
+        # Sample/fixture YAML and rendered HTML are excluded via .gitignore;
+        # the .markdownlint.json file relaxes line length on tables.
+        exclude: ^(\.agentready/.*|\.cursor/.*)$
+    repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.48.0
+  - hooks:
       - id: go-mod-tidy
     repo: https://github.com/dnephin/pre-commit-golang
     rev: v0.5.1

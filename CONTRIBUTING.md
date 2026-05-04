@@ -5,6 +5,7 @@ This document provides guidelines for contributing to this repository.
 ## Development Environment Setup
 
 ### Prerequisites
+
 * Basic tools: `curl`, `jq`, `oc`
 * Go: version in [`go.mod`](go.mod) (see also [`mise.toml`](mise.toml) for a pinned toolchain via [mise](https://mise.jdx.dev/))
 * Container engine: `podman`
@@ -18,6 +19,7 @@ This document provides guidelines for contributing to this repository.
 ## Running a test environment
 
 ### Kwok Container
+
 "Kwok" is a Kubernetes SIGs-hosted project. KWOK is an abbreviation for
 Kubernetes Without Kubelet. Kwok simply simulates the node's behaviour.
 As a result, it can mimic a high number of nodes and pods while consuming
@@ -26,36 +28,43 @@ only a small amount of memory.
 To run the Kwok container with the Kwok Kubernetes tool, follow these steps:
 
 1. Build the kwok container using the following command:
-   ```
+
+   ```bash
    podman build -t kwok -f kwok/Dockerfile kwok
    ```
-2. Bring the clusters up by running the following command from the 
+
+2. Bring the clusters up by running the following command from the
    repo's root directory:
-    ```
+
+    ```bash
     podman kube play kwok/kwok_container_default.yml
     ```
 
 3. Check `podman pod list` should list the below pod
-    ```
+
+    ```text
     POD ID        NAME            STATUS      CREATED        INFRA ID      # OF CONTAINERS
     e815836efc86  kwok-pod        Running     1 minutes ago  8466696a9956  2
     ```
 
 4. Once the Kwok cluster is up and running, set the cluster details in the
    OpenShift client with the following commands:
-    ```
+
+    ```bash
     oc config set-cluster kwok --server=http://127.0.0.1:8080
     ```
 
 5. Create a new context (you only need to set it once) for the Kwok
    cluster with the following command:
-    ```
+
+    ```bash
     oc config set-context kwok --cluster=kwok
     ```
 
 6. Set the Kwok context as the current context, if you've previously switched
    to another cluster, with the following command:
-    ```
+
+    ```bash
     oc config use-context kwok
     ```
 
@@ -76,7 +85,8 @@ scheduling and running them on K8s clusters.
 To build the image locally, one needs to be logged in to a `redhat.com` account
 (With e.g `podman login`) in order to access the base image and then the image
 can be built with:
-```
+
+```bash
 podman build -t segment-bridge .
 ```
 
@@ -90,11 +100,13 @@ and Segment credentials for upload. Typical variables include
 Kubernetes deployment examples use Kustomize under [`config/`](config/).
 
 ### Unit Tests
+
 Go unit tests are colocated with production code in each package
 (e.g. `tekton-to-segment/tekton_to_segment_test.go`,
 `segment/uploader_test.go`). Test filenames end with `_test.go`.
 
 #### Running the Unit Tests Locally
+
 1. Clone your fork of the project.
 2. Navigate to the project's root directory
 3. To run all the Go unit tests in the repository, from the repo root (with Go
@@ -102,19 +114,21 @@ Go unit tests are colocated with production code in each package
    `go clean -testcache && go test ./...`
    A similar output is expected (package list may vary):
 
+    ```text
+    ?    github.com/redhat-appstudio/segment-bridge.git/containerfixture [no test files]
+    ?    github.com/redhat-appstudio/segment-bridge.git/kwok [no test files]
+    ok   github.com/redhat-appstudio/segment-bridge.git/fetch-konflux-op-records 0.002s
+    ok   github.com/redhat-appstudio/segment-bridge.git/fetch-namespace-records 0.002s
+    ok   github.com/redhat-appstudio/segment-bridge.git/get-konflux-public-info 0.002s
+    ok   github.com/redhat-appstudio/segment-bridge.git/scripts 0.002s
+    ok   github.com/redhat-appstudio/segment-bridge.git/segment 0.002s
+    ok   github.com/redhat-appstudio/segment-bridge.git/tekton-to-segment 0.002s
     ```
-    ?   	github.com/redhat-appstudio/segment-bridge.git/containerfixture	[no test files]
-    ?   	github.com/redhat-appstudio/segment-bridge.git/kwok	[no test files]
-    ok  	github.com/redhat-appstudio/segment-bridge.git/fetch-konflux-op-records	0.002s
-    ok  	github.com/redhat-appstudio/segment-bridge.git/fetch-namespace-records	0.002s
-    ok  	github.com/redhat-appstudio/segment-bridge.git/get-konflux-public-info	0.002s
-    ok  	github.com/redhat-appstudio/segment-bridge.git/scripts	0.002s
-    ok  	github.com/redhat-appstudio/segment-bridge.git/segment	0.002s
-    ok  	github.com/redhat-appstudio/segment-bridge.git/tekton-to-segment	0.002s
-    ```
+
 4. If you want to run tests for a specific package, use its import path, for
    example:
-    ```
+
+    ```bash
     go test ./scripts
     ```
 
@@ -126,7 +140,7 @@ production layout). Locally, after building (see the Dockerfile header for
 `prepare-oc-client-for-build.sh` and the `podman build -v ... deps ...` invocation),
 you can run the same tests with:
 
-```
+```bash
 export SEGMENT_BRIDGE_TEST_IMAGE=segment-bridge:test
 go test ./...
 ```
@@ -135,15 +149,19 @@ Optional: `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` selects `podman` or `docker` w
 both are installed; otherwise `podman` is tried first, then `docker`.
 
 #### Test Coverage
+
 CI generates a coverage profile (`coverage.out`) and uploads it to
 [Codecov](https://about.codecov.io/). The upload is currently
 advisory — it does not block PR merging. To generate a local coverage
 report:
 
-    go test -coverprofile=coverage.out ./...
-    go tool cover -html=coverage.out
+```bash
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
 
 ### Integration Tests
+
 Integration testing is performed through Go unit tests using
 `testfixture` to exercise shell scripts. These tests run the
 production scripts inside the container image, validating the full
@@ -164,13 +182,14 @@ above for setup and commands. CI runs this automatically (see the
 3. Make sure all unit tests are passing.
 
 ### Commit Messages
+
 We use [gitlint](https://jorisroovers.com/gitlint/) to standardize commit messages,
 following the [Conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) format.
 
 If you include a Jira ticket identifier (e.g., RHTAPWATCH-387) in the commit message,
 PR name, or branch name, it will link to the Jira ticket.
 
-```
+```text
 feat(RHTAPWATCH-387): Include the UserAgent field
 
 Include the UserAgent field in all events sent to Segment.
@@ -180,12 +199,14 @@ Signed-off-by: Your Name <your-email@example.com>
 ```
 
 ### Pull Request Description
+
 When creating a Pull Request (PR), use the commit message as a starting point,
 and add a brief explanation. Include what changes you made and why.
 This helps reviewers understand your work without needing to investigate
 deeply. Clear information leads to a smoother review process.
 
 ### Code Review Guidelines
+
 * Each PR should be approved by at least 2 team members. Those approvals are only
 relevant if given since the last major change in the PR content.
 

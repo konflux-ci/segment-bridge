@@ -22,7 +22,7 @@
 #
 
 # First stage: Build the tkn-results binary
-FROM registry.access.redhat.com/ubi9/go-toolset:9.7-1777537863 AS builder
+FROM registry.access.redhat.com/ubi9/go-toolset:9.7-1777898790 AS builder
 ARG TARGETARCH
 WORKDIR /build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOBIN=/build \

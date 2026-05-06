@@ -1,0 +1,16 @@
+# Fixture and sample READMEs intentionally use long lines and table styles
+# that mirror the upstream sources they document. Mirrors the same pattern
+# used in .yamllint.yaml for sample/fixture directories.
+schema/
+tekton-to-segment/sample/
+get-konflux-public-info/sample/
+fetch-konflux-op-records/sample/
+
+# Agent skill files use long descriptive lines optimized for AI consumption.
+skills/
+
+# Generated reports
+.agentready/
+
+# Local Cursor/agent paths (mirrors pre-commit markdownlint hook exclude).
+.cursor/

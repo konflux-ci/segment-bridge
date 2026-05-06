@@ -1,13 +1,17 @@
 ---
-name: Dependabot auto-merge
-"on": pull_request
+name: Bot auto-merge
+"on":
+  pull_request:
+    types:
+      - opened
+      - reopened
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  dependabot:
+  auto-merge:
     runs-on: ubuntu-latest
     if: >-
       github.actor == 'dependabot[bot]'
@@ -19,12 +23,22 @@ jobs:
         uses: dependabot/fetch-metadata@v3
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Approve PR
-        run: gh pr review --approve "$PR_URL"
+      - name: Auto-merge Dependabot patch and minor updates
+        if: >-
+          github.actor == 'dependabot[bot]'
+          && (steps.metadata.outputs.update-type ==
+          'version-update:semver-patch'
+          || steps.metadata.outputs.update-type ==
+          'version-update:semver-minor')
+        run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Enable auto-merge
+      - name: Auto-merge Konflux non-major updates
+        if: >-
+          github.actor == 'red-hat-konflux[bot]'
+          && contains(github.event.pull_request.title,
+          '(major)') == false
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}

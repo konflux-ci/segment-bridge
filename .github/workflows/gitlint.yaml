@@ -24,7 +24,7 @@ jobs:
             github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.14'
           cache: 'pip'
       - name: Install Python dependencies
         run: pip install -r requirements.lock

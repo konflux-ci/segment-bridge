@@ -10,7 +10,7 @@ line-length=72
 
 [body-first-line-empty]
 
-# Bot users tends to generate invalid commits.
+# Bot users tend to generate invalid commits (no body, no Signed-off-by).
 [ignore-by-author-name]
-regex=(dependabot|red-hat-trusted-app-pipeline|red-hat-konflux)
+regex=(dependabot|red-hat-trusted-app-pipeline|red-hat-konflux|fullsend-ai-fullsend|\[bot\])
 ignore=all

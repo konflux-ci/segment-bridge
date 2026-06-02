@@ -1,0 +1,31 @@
+# This repo's product is shell scripts (scripts/*.sh). All Go code is
+# test infrastructure — fixtures, helpers, and mocks that exercise those
+# scripts. Excluding test-infra paths keeps the coverage metric honest
+# instead of measuring how much of the test harness is self-tested.
+---
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+ignore:
+  - "testfixture/"
+  - "containerfixture/"
+  - "kwok/"
+  - "webfixture/"
+  - "stats/"
+  - "scripts/runner.go"
+  - "tekton-e2e/"
+
+flags:
+  unit-tests:
+    carryforward: true
+  e2e-tests:
+    carryforward: true
+
+comment:
+  layout: "condensed_header, condensed_files"

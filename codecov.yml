@@ -17,7 +17,6 @@ ignore:
   - "containerfixture/"
   - "kwok/"
   - "webfixture/"
-  - "stats/"
   - "scripts/runner.go"
   - "tekton-e2e/"
 

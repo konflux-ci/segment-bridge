@@ -37,5 +37,8 @@ deps/
 *.swp
 *.swo
 
+# kcov shell coverage output
+kcov-output/
+
 # macOS
 .DS_Store

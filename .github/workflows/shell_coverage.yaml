@@ -1,0 +1,52 @@
+---
+name: Shell script coverage
+"on":
+  push:
+    branches:
+      - main
+  merge_group:
+    types:
+      - checks_requested
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+jobs:
+  shell-coverage:
+    runs-on: ubuntu-latest
+    env:
+      KCOV_OUTPUT_DIR: kcov-output
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Install Podman and kcov build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman \
+            cmake g++ binutils-dev libdw-dev \
+            libcurl4-openssl-dev zlib1g-dev
+      - name: Build and install kcov
+        run: |
+          git clone --depth 1 \
+            https://github.com/SimonKagstrom/kcov.git /tmp/kcov-src
+          cmake -S /tmp/kcov-src -B /tmp/kcov-build
+          cmake --build /tmp/kcov-build -j"$(nproc)"
+          sudo cmake --install /tmp/kcov-build
+          kcov --version
+      - name: Run Go tests with kcov shell instrumentation
+        run: |
+          mkdir -p "$KCOV_OUTPUT_DIR"
+          go test -short -v ./...
+      - name: Upload shell coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: shell-scripts
+          files: kcov-output/kcov-merged/cobertura.xml
+          fail_ci_if_error: false

@@ -25,6 +25,8 @@ flags:
     carryforward: true
   e2e-tests:
     carryforward: true
+  shell-scripts:
+    carryforward: true
 
 comment:
   layout: "condensed_header, condensed_files"

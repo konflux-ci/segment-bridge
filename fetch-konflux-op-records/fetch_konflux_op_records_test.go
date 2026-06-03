@@ -15,6 +15,7 @@ import (
 	"github.com/redhat-appstudio/segment-bridge.git/containerfixture"
 	"github.com/redhat-appstudio/segment-bridge.git/kwok"
 	"github.com/redhat-appstudio/segment-bridge.git/scripts"
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -129,6 +130,21 @@ func applyInputDir(t *testing.T, inputDir string) {
 		}
 	}
 	time.Sleep(500 * time.Millisecond)
+}
+
+// TestFetchKonfluxOpRecordsCRDNotInstalled covers the error-handling path in
+// fetch-konflux-op-records.sh (lines 35-41) when the Konflux CRD is absent
+// from the cluster. A fresh kwok cluster has no custom CRDs, so kubectl exits
+// non-zero and the script must exit 1 with an error message on stderr.
+// The run goes through testfixture.RunRepoScript so kcov instruments those lines.
+func TestFetchKonfluxOpRecordsCRDNotInstalled(t *testing.T) {
+	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
+		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
+		scriptAbs, err := filepath.Abs(scriptPath)
+		require.NoError(t, err)
+		_, err = testfixture.RunRepoScript(scriptAbs, nil, os.Environ())
+		require.Error(t, err, "script must exit non-zero when Konflux CRD is not installed")
+	})
 }
 
 func TestFetchKonfluxOpRecords(t *testing.T) {

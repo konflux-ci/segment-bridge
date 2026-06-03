@@ -38,8 +38,7 @@ if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
   TMPNETRC=$(mktemp)
   trap 'rm -f "$TMPNETRC"' EXIT
   # Extract hostname from SEGMENT_BATCH_API for the .netrc machine field
-  SEGMENT_HOST=$(echo "${SEGMENT_BATCH_API:-https://api.segment.io/v1/batch}" \
-    | sed -E 's|https?://([^/]+).*|\1|')
+  SEGMENT_HOST=$(echo "${SEGMENT_BATCH_API:-https://api.segment.io/v1/batch}" | sed -E 's|https?://([^/]+).*|\1|')
   # Segment uses HTTP Basic Auth: write key as login, empty password
   printf 'machine %s login %s password ""\n' "$SEGMENT_HOST" "$SEGMENT_WRITE_KEY" > "$TMPNETRC"
   chmod 600 "$TMPNETRC"

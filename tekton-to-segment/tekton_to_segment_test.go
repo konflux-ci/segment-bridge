@@ -79,6 +79,32 @@ func parseSegmentEventLines(t *testing.T, lines []string) []map[string]interface
 	return out
 }
 
+// TestTektonToSegment_EmptyLines verifies that blank lines in the input are
+// silently skipped (the "[[ -z "$record" ]] && continue" guard) and that the
+// heartbeat event is still emitted at the end.
+func TestTektonToSegment_EmptyLines(t *testing.T) {
+	t.Setenv("CLUSTER_ID", "test-cluster")
+	t.Setenv("HEARTBEAT_TIMESTAMP", "2026-03-04T08:00:00Z")
+	t.Setenv("KONFLUX_VERSION", "")
+	t.Setenv("KUBERNETES_VERSION", "")
+
+	tmp, err := os.CreateTemp(t.TempDir(), "empty-input-*.ndjson")
+	require.NoError(t, err, "create temp input file")
+	_, err = tmp.WriteString("\n\n")
+	require.NoError(t, err, "write blank lines to temp input file")
+	require.NoError(t, tmp.Close(), "close temp input file")
+
+	output, err := testfixture.RunScriptWithInputFile(tmp.Name(), scriptPath)
+	require.NoError(t, err, "script must exit 0 when input contains only blank lines")
+
+	lines := trimNonEmptyLines(string(output))
+	require.Len(t, lines, 1, "expected exactly one output line (heartbeat only)")
+
+	var event map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(lines[0]), &event), "output must be valid JSON")
+	assert.Equal(t, "Segment Bridge Heartbeat", event["event"])
+}
+
 // trimNonEmptyLines splits on newlines and returns non-empty trimmed lines.
 func trimNonEmptyLines(s string) []string {
 	var lines []string

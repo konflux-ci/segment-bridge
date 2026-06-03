@@ -5,7 +5,4 @@
 #
 set -o pipefail -o errexit -o nounset
 
-jq \
-  --compact-output \
-  --slurp \
-  '{batch: .}'
+jq --compact-output --slurp '{batch: .}'

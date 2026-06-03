@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/quick"
@@ -13,6 +15,7 @@ import (
 	"github.com/lithammer/dedent"
 	"github.com/redhat-appstudio/segment-bridge.git/scripts"
 	"github.com/redhat-appstudio/segment-bridge.git/stats"
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/redhat-appstudio/segment-bridge.git/webfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -123,7 +126,20 @@ func requireJSONDecode(t *testing.T, data string, v any, msgAndArgs ...any) {
 }
 
 func withScriptStdin(t *testing.T, script string, tFunc func(io.WriteCloser)) {
-	cmd := exec.Command(script)
+	var cmd *exec.Cmd
+	if kcovDir := strings.TrimSpace(os.Getenv(testfixture.EnvKcovOutputDir)); kcovDir != "" {
+		if _, err := exec.LookPath("kcov"); err == nil {
+			absScript, _ := filepath.Abs(script)
+			cmd = exec.Command("kcov",
+				"--include-path="+filepath.Dir(absScript),
+				kcovDir,
+				absScript,
+			)
+		}
+	}
+	if cmd == nil {
+		cmd = exec.Command(script)
+	}
 	stdin, err := cmd.StdinPipe()
 	require.NoError(t, err, "Failed to connect to script STDIN")
 	require.NoError(t, cmd.Start(), "Failed to start script")

@@ -14,6 +14,7 @@ import (
 const (
 	EnvTestImage        = "SEGMENT_BRIDGE_TEST_IMAGE"
 	EnvContainerRuntime = "SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME"
+	EnvKcovOutputDir    = "KCOV_OUTPUT_DIR"
 	containerBinDir     = "/usr/local/bin"
 	kubeconfigEnvVar    = "KUBECONFIG"
 	envFileMode         = 0o600
@@ -51,7 +52,8 @@ func RunRepoScript(scriptPath string, stdin *os.File, env []string, args ...stri
 }
 
 func runOnHost(scriptPath string, stdin *os.File, env []string, args []string) ([]byte, error) {
-	cmd := exec.Command(scriptPath, args...)
+	execPath, execArgs := kcovWrap(scriptPath, args)
+	cmd := exec.Command(execPath, execArgs...)
 	if stdin != nil {
 		cmd.Stdin = stdin
 	}
@@ -61,6 +63,30 @@ func runOnHost(scriptPath string, stdin *os.File, env []string, args []string) (
 		return nil, fmt.Errorf("error executing script: %w", err)
 	}
 	return out, nil
+}
+
+// kcovWrap prepends kcov to the command when KCOV_OUTPUT_DIR is set and kcov
+// is installed. Multiple runs to the same output directory are auto-merged by
+// kcov, producing a single Cobertura XML that Codecov can consume.
+func kcovWrap(scriptPath string, args []string) (string, []string) {
+	kcovDir := strings.TrimSpace(os.Getenv(EnvKcovOutputDir))
+	if kcovDir == "" {
+		return scriptPath, args
+	}
+	if _, err := exec.LookPath("kcov"); err != nil {
+		return scriptPath, args
+	}
+	absScript, err := filepath.Abs(scriptPath)
+	if err != nil {
+		return scriptPath, args
+	}
+	kcovArgs := []string{
+		"--include-path=" + filepath.Dir(absScript),
+		kcovDir,
+		absScript,
+	}
+	kcovArgs = append(kcovArgs, args...)
+	return "kcov", kcovArgs
 }
 
 func runInContainer(scriptPath string, stdin *os.File, env []string, args []string, image string) ([]byte, error) {

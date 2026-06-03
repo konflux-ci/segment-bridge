@@ -41,5 +41,8 @@ deps/
 .env
 .env.*
 
+# kcov shell coverage output
+kcov-output/
+
 # macOS
 .DS_Store

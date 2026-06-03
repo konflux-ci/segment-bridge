@@ -17,14 +17,16 @@ ignore:
   - "containerfixture/"
   - "kwok/"
   - "webfixture/"
-  - "stats/"
   - "scripts/runner.go"
+  - "scripts/prepare-oc-client-for-build.sh"
   - "tekton-e2e/"
 
 flags:
   unit-tests:
     carryforward: true
   e2e-tests:
+    carryforward: true
+  shell-scripts:
     carryforward: true
 
 comment:

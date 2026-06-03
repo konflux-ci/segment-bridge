@@ -5,6 +5,7 @@ rules:
     max-spaces-inside: -1
 ignore:
   - .tekton/
+  - .github/workflows/fullsend.yaml
   - tekton-to-segment/sample/
   - get-konflux-public-info/sample/
   - fetch-konflux-op-records/sample/

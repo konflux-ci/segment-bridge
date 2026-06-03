@@ -77,6 +77,8 @@ COPY --chown=root:root --chmod=755 \
     scripts/tekton-main-job.sh \
     /usr/local/bin/
 
+COPY --chown=root:root --chmod=644 scripts/jq/ /usr/local/bin/jq/
+
 COPY --chown=root:root --chmod=644 LICENSE /licenses/LICENSE
 
 ENV TEKTON_RESULTS_API_ADDR="localhost:50051"

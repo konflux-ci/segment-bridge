@@ -18,6 +18,7 @@ ignore:
   - "kwok/"
   - "webfixture/"
   - "scripts/runner.go"
+  - "scripts/prepare-oc-client-for-build.sh"
   - "tekton-e2e/"
 
 flags:

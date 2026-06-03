@@ -12,8 +12,8 @@ bin/
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Dependency directories
+vendor/
 
 # Python
 __pycache__/
@@ -36,6 +36,10 @@ deps/
 .idea/
 *.swp
 *.swo
+
+# Environment files
+.env
+.env.*
 
 # macOS
 .DS_Store

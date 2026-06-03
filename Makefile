@@ -15,7 +15,7 @@ setup: ## One-command development environment setup.
 	@echo "Setup complete. Run 'make test' to verify."
 
 test: ## Run all Go unit tests with the pinned toolchain.
-	mise exec -- go test ./...
+	mise exec -- go test -race ./...
 
 lint: ## Run golangci-lint with the pinned toolchain.
 	mise exec -- golangci-lint run

@@ -46,9 +46,10 @@ func buildRestConfig(t *testing.T) *rest.Config {
 	return config
 }
 
-// applyInputDir applies each YAML in inputDir in sorted order (so CRD is applied before CR).
-// After applying CRD(s), invalidates discovery cache so the Konflux kind is found.
-// Waits for the cluster API to be ready. Strips server-managed fields before Create.
+// applyInputDir applies each YAML file in inputDir in sorted order (so CRDs
+// are applied before CRs). Strips server-managed fields before Create.
+// REST mapping is retried with discovery refresh until the kind is available,
+// so CRD propagation lag in the kwok apiserver does not cause flaky failures.
 func applyInputDir(t *testing.T, inputDir string) {
 	t.Helper()
 	ctx := context.Background()
@@ -78,7 +79,7 @@ func applyInputDir(t *testing.T, inputDir string) {
 	}
 	sort.Strings(names)
 
-	applyFile := func(path string, m *restmapper.DeferredDiscoveryRESTMapper) {
+	applyFile := func(path string, m *restmapper.DeferredDiscoveryRESTMapper) *restmapper.DeferredDiscoveryRESTMapper {
 		data, err := os.ReadFile(path)
 		require.NoError(t, err, "read %s", path)
 		decoder := yaml.NewDecoder(bytes.NewReader(data))
@@ -100,8 +101,24 @@ func applyInputDir(t *testing.T, inputDir string) {
 			if gvk.Empty() || gvk.Kind == "" {
 				continue
 			}
-			mapping, err := m.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
-			require.NoError(t, err, "rest mapping for %s in %s", gvk, path)
+			// Poll until the REST mapping is available (bounded to 10s).
+			// This handles CRD propagation lag: the kwok apiserver may not
+			// expose a newly registered CRD through discovery immediately.
+			var mapping *meta.RESTMapping
+			require.Eventually(t, func() bool {
+				var mapErr error
+				mapping, mapErr = m.RESTMapping(
+					schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind},
+					gvk.Version,
+				)
+				if mapErr != nil {
+					disco.Invalidate()
+					m = restmapper.NewDeferredDiscoveryRESTMapper(disco)
+				}
+				return mapErr == nil
+			}, 10*time.Second, 200*time.Millisecond,
+				"REST mapping for %s/%s not available after 10s (file: %s)",
+				gvk.GroupVersion(), gvk.Kind, path)
 			gvr := mapping.Resource
 			var ri dynamic.ResourceInterface
 			ns := obj.GetNamespace()
@@ -119,19 +136,13 @@ func applyInputDir(t *testing.T, inputDir string) {
 			}
 			require.NoError(t, err, "apply resource from %s", path)
 		}
+		return m
 	}
 
-	for i, name := range names {
+	for _, name := range names {
 		path := filepath.Join(inputDir, name)
-		applyFile(path, mapper)
-		// After applying CRD file(s), refresh discovery so Konflux kind is found.
-		if i == 0 || strings.Contains(name, "crd") {
-			disco.Invalidate()
-			mapper = restmapper.NewDeferredDiscoveryRESTMapper(disco)
-			time.Sleep(500 * time.Millisecond)
-		}
+		mapper = applyFile(path, mapper)
 	}
-	time.Sleep(500 * time.Millisecond)
 }
 
 // TestFetchKonfluxOpRecordsCRDNotInstalled covers the error-handling path in

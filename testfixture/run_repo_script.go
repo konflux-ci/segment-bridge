@@ -1,6 +1,7 @@
 package testfixture
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -51,6 +52,20 @@ func RunRepoScript(scriptPath string, stdin *os.File, env []string, args ...stri
 	return runInContainer(scriptPath, stdin, env, args, image)
 }
 
+// RunRepoScriptWithStderr is like RunRepoScript but also captures stderr
+// separately so callers can assert on diagnostic output (e.g. warning messages).
+// In container mode (SEGMENT_BRIDGE_TEST_IMAGE set) stderr is not captured and
+// the returned stderr slice is nil; the container's stderr passes through to
+// the test process.
+func RunRepoScriptWithStderr(scriptPath string, stdin *os.File, env []string, args ...string) (stdout, stderr []byte, err error) {
+	image := strings.TrimSpace(os.Getenv(EnvTestImage))
+	if image != "" {
+		out, runErr := runInContainer(scriptPath, stdin, env, args, image)
+		return out, nil, runErr
+	}
+	return runOnHostWithStderr(scriptPath, stdin, env, args)
+}
+
 func runOnHost(scriptPath string, stdin *os.File, env []string, args []string) ([]byte, error) {
 	execPath, execArgs := kcovWrap(scriptPath, args)
 	cmd := exec.Command(execPath, execArgs...)
@@ -63,6 +78,22 @@ func runOnHost(scriptPath string, stdin *os.File, env []string, args []string) (
 		return nil, fmt.Errorf("error executing script: %w", err)
 	}
 	return out, nil
+}
+
+func runOnHostWithStderr(scriptPath string, stdin *os.File, env []string, args []string) ([]byte, []byte, error) {
+	execPath, execArgs := kcovWrap(scriptPath, args)
+	cmd := exec.Command(execPath, execArgs...)
+	if stdin != nil {
+		cmd.Stdin = stdin
+	}
+	cmd.Env = env
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, stderrBuf.Bytes(), fmt.Errorf("error executing script: %w", err)
+	}
+	return out, stderrBuf.Bytes(), nil
 }
 
 // kcovWrap prepends kcov to the command when KCOV_OUTPUT_DIR is set and kcov

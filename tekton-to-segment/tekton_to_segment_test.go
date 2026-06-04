@@ -88,13 +88,7 @@ func TestTektonToSegment_EmptyLines(t *testing.T) {
 	t.Setenv("KONFLUX_VERSION", "")
 	t.Setenv("KUBERNETES_VERSION", "")
 
-	tmp, err := os.CreateTemp(t.TempDir(), "empty-input-*.ndjson")
-	require.NoError(t, err, "create temp input file")
-	_, err = tmp.WriteString("\n\n")
-	require.NoError(t, err, "write blank lines to temp input file")
-	require.NoError(t, tmp.Close(), "close temp input file")
-
-	output, err := testfixture.RunScriptWithInputFile(tmp.Name(), scriptPath)
+	output, err := testfixture.RunScriptWithInputFile("testdata/blank-lines.ndjson", scriptPath)
 	require.NoError(t, err, "script must exit 0 when input contains only blank lines")
 
 	lines := trimNonEmptyLines(string(output))

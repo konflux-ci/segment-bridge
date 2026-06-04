@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,7 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -109,7 +111,7 @@ func applyInputDir(t *testing.T, inputDir string) {
 				ri = dynClient.Resource(gvr)
 			}
 			_, err = ri.Create(ctx, obj, metav1.CreateOptions{})
-			if errors.IsAlreadyExists(err) {
+			if apierrors.IsAlreadyExists(err) {
 				existing, getErr := ri.Get(ctx, obj.GetName(), metav1.GetOptions{})
 				require.NoError(t, getErr, "get existing resource for replace in %s", path)
 				obj.SetResourceVersion(existing.GetResourceVersion())
@@ -142,8 +144,13 @@ func TestFetchKonfluxOpRecordsCRDNotInstalled(t *testing.T) {
 		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
 		scriptAbs, err := filepath.Abs(scriptPath)
 		require.NoError(t, err)
-		_, err = testfixture.RunRepoScript(scriptAbs, nil, os.Environ())
-		require.Error(t, err, "script must exit non-zero when Konflux CRD is not installed")
+		_, runErr := testfixture.RunRepoScript(scriptAbs, nil, os.Environ())
+		require.Error(t, runErr, "script must exit non-zero when Konflux CRD is not installed")
+		var exitErr *exec.ExitError
+		if errors.As(runErr, &exitErr) {
+			assert.Equal(t, 1, exitErr.ExitCode(),
+				"script must exit 1 (not some other failure) when Konflux CRD is absent")
+		}
 	})
 }
 

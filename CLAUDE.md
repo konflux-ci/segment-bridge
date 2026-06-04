@@ -29,7 +29,6 @@ Lint and type-check a single file (fast, no full build):
 golangci-lint run ./path/to/file.go
 shellcheck path/to/file.sh
 yamllint path/to/file.yaml
-mypy path/to/file.py
 ```
 
 ## Non-obvious conventions
@@ -69,6 +68,8 @@ mypy path/to/file.py
 | `KUBECTL` | auto-detect | All `fetch-*.sh` / `get-konflux-public-info.sh` |
 | `NAMESPACE_RECENT_HOURS` | `4` | `fetch-namespace-records.sh` |
 | `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` |
+| `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` — max records per page |
+| `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` — curl retry count |
 | `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests — run scripts inside image |
 | `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` | auto (`podman`→`docker`) | Go tests |
 

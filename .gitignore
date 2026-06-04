@@ -44,5 +44,8 @@ deps/
 # kcov shell coverage output
 kcov-output/
 
+# Repomix generated output
+repomix/repomix-output.md
+
 # macOS
 .DS_Store

@@ -21,6 +21,16 @@ podman build -t segment-bridge .
 SEGMENT_BRIDGE_TEST_IMAGE=segment-bridge:test go test ./...
 ```
 
+## Single-file verification
+
+Lint and type-check a single file (fast, no full build):
+
+```bash
+golangci-lint run ./path/to/file.go
+shellcheck path/to/file.sh
+yamllint path/to/file.yaml
+```
+
 ## Non-obvious conventions
 
 - **Kwok, not Kind.** Local K8s simulation uses [kwok](https://kwok.sigs.k8s.io/)
@@ -58,8 +68,33 @@ SEGMENT_BRIDGE_TEST_IMAGE=segment-bridge:test go test ./...
 | `KUBECTL` | auto-detect | All `fetch-*.sh` / `get-konflux-public-info.sh` |
 | `NAMESPACE_RECENT_HOURS` | `4` | `fetch-namespace-records.sh` |
 | `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` |
+| `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` — max records per page |
+| `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` — curl retry count |
 | `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests — run scripts inside image |
 | `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` | auto (`podman`→`docker`) | Go tests |
+
+## Pattern references
+
+For each common change type, follow the canonical example and the matching
+skill file under `skills/` (also linked via `.claude/skills/`):
+
+- **New data source / fetch script** — skill:
+  `skills/adding-a-data-source/SKILL.md`. Example:
+  `fetch-component-records/fetch_component_records_test.go` and
+  `scripts/fetch-component-records.sh`.
+- **Segment event mapping change** — skill:
+  `skills/updating-segment-event-mappings/SKILL.md`. Example:
+  `scripts/tekton-to-segment.sh` and
+  `tekton-to-segment/sample/{input,expected}.json`.
+- **New ADR** — skill: `skills/adding-an-adr/SKILL.md`. Example:
+  `docs/adr/0003-go-idiomatic-layout-over-src-tests.md`.
+- **CI workflow change** — skill:
+  `skills/modifying-ci-workflows/SKILL.md`. Example:
+  `.github/workflows/pull_request_and_push.yaml`.
+- **New kwok test fixture** — skill:
+  `skills/adding-a-kwok-test-fixture/SKILL.md`. Example:
+  `fetch-component-records/testdata/` and
+  `fetch-component-records/fetch_component_records_test.go`.
 
 ## Toolchain
 

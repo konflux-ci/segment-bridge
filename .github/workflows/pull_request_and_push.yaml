@@ -13,7 +13,7 @@ name: checks on Pull Request and push
       - reopened
       - synchronize
 jobs:
-  pre-commit:
+  lint-and-checks:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -31,5 +31,8 @@ jobs:
           cache-dependency-path: requirements.lock
       - name: Install Python dependencies
         run: pip install -r requirements.lock
-      - name: Run pre-commit
+      - name: "Lint: run pre-commit checks (shellcheck, golangci-lint,\
+          \ yamllint, actionlint, markdownlint)"
         run: pre-commit run --verbose --all-files
+      - name: "Type-check: go vet"
+        run: go vet ./...

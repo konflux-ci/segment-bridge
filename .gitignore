@@ -12,8 +12,8 @@ bin/
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Dependency directories
+vendor/
 
 # Python
 __pycache__/
@@ -37,8 +37,15 @@ deps/
 *.swp
 *.swo
 
+# Environment files
+.env
+.env.*
+
 # kcov shell coverage output
 kcov-output/
+
+# Repomix generated output
+repomix/repomix-output.md
 
 # macOS
 .DS_Store

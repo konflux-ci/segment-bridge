@@ -1,0 +1,21 @@
+# .containerignore -- keep in sync with Dockerfile COPY instructions.
+# The Dockerfile copies: scripts/*.sh, LICENSE, and staged binaries from
+# builder / oc-client stages. Everything else is excluded from context.
+.git
+.agentready
+.claude
+.cursor
+.venv
+__pycache__
+*.pyc
+*.out
+*.test
+.github
+docs
+skills
+kwok
+config
+schema
+data
+bin
+*.md

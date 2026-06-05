@@ -49,19 +49,18 @@ func RunRepoScript(scriptPath string, stdin *os.File, env []string, args ...stri
 	if image == "" {
 		return runOnHost(scriptPath, stdin, env, args)
 	}
-	return runInContainer(scriptPath, stdin, env, args, image)
+	return runInContainer(scriptPath, stdin, env, args, image, nil)
 }
 
 // RunRepoScriptWithStderr is like RunRepoScript but also captures stderr
 // separately so callers can assert on diagnostic output (e.g. warning messages).
-// In container mode (SEGMENT_BRIDGE_TEST_IMAGE set) stderr is not captured and
-// the returned stderr slice is nil; the container's stderr passes through to
-// the test process.
+// Both host and container modes capture and return stderr.
 func RunRepoScriptWithStderr(scriptPath string, stdin *os.File, env []string, args ...string) (stdout, stderr []byte, err error) {
 	image := strings.TrimSpace(os.Getenv(EnvTestImage))
 	if image != "" {
-		out, runErr := runInContainer(scriptPath, stdin, env, args, image)
-		return out, nil, runErr
+		var stderrBuf bytes.Buffer
+		out, runErr := runInContainer(scriptPath, stdin, env, args, image, &stderrBuf)
+		return out, stderrBuf.Bytes(), runErr
 	}
 	return runOnHostWithStderr(scriptPath, stdin, env, args)
 }
@@ -120,7 +119,10 @@ func kcovWrap(scriptPath string, args []string) (string, []string) {
 	return "kcov", kcovArgs
 }
 
-func runInContainer(scriptPath string, stdin *os.File, env []string, args []string, image string) ([]byte, error) {
+// runInContainer executes scriptPath inside the image. When stderrCapture is
+// non-nil the container's stderr is written into it; otherwise it passes
+// through to the test process's stderr.
+func runInContainer(scriptPath string, stdin *os.File, env []string, args []string, image string, stderrCapture *bytes.Buffer) ([]byte, error) {
 	base := filepath.Base(scriptPath)
 	if _, ok := bundledScriptBaseNames[base]; !ok {
 		return nil, fmt.Errorf("testfixture: %q is not a script bundled in the segment-bridge image (container mode)", base)
@@ -200,6 +202,9 @@ func runInContainer(scriptPath string, stdin *os.File, env []string, args []stri
 		}
 	}
 
+	if stderrCapture != nil {
+		cmd.Stderr = stderrCapture
+	}
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("error executing script in container: %w", err)

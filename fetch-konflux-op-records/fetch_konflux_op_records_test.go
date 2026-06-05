@@ -147,10 +147,10 @@ func TestFetchKonfluxOpRecordsCRDNotInstalled(t *testing.T) {
 		_, runErr := testfixture.RunRepoScript(scriptAbs, nil, os.Environ())
 		require.Error(t, runErr, "script must exit non-zero when Konflux CRD is not installed")
 		var exitErr *exec.ExitError
-		if errors.As(runErr, &exitErr) {
-			assert.Equal(t, 1, exitErr.ExitCode(),
-				"script must exit 1 (not some other failure) when Konflux CRD is absent")
-		}
+		require.True(t, errors.As(runErr, &exitErr),
+			"expected *exec.ExitError, got %T: %v", runErr, runErr)
+		assert.Equal(t, 1, exitErr.ExitCode(),
+			"script must exit 1 (not some other failure) when Konflux CRD is absent")
 	})
 }
 

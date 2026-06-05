@@ -43,7 +43,8 @@ func runMainJobWithEnv(t *testing.T, scriptPath string, env []string) (stdout, s
 	var cmd *exec.Cmd
 	if kcovDir := strings.TrimSpace(os.Getenv(testfixture.EnvKcovOutputDir)); kcovDir != "" {
 		if _, err := exec.LookPath("kcov"); err == nil {
-			absScript, _ := filepath.Abs(mainJobScript)
+			absScript, err := filepath.Abs(mainJobScript)
+			require.NoError(t, err, "resolve absolute path of main job script for kcov")
 			cmd = exec.Command("kcov",
 				"--include-path="+filepath.Dir(absScript),
 				kcovDir,

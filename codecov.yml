@@ -19,6 +19,7 @@ ignore:
   - "webfixture/"
   - "scripts/runner.go"
   - "scripts/prepare-oc-client-for-build.sh"
+  - "scripts/jq/"
   - "tekton-e2e/"
 
 flags:

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -15,10 +17,11 @@ import (
 	"github.com/redhat-appstudio/segment-bridge.git/containerfixture"
 	"github.com/redhat-appstudio/segment-bridge.git/kwok"
 	"github.com/redhat-appstudio/segment-bridge.git/scripts"
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -108,7 +111,7 @@ func applyInputDir(t *testing.T, inputDir string) {
 				ri = dynClient.Resource(gvr)
 			}
 			_, err = ri.Create(ctx, obj, metav1.CreateOptions{})
-			if errors.IsAlreadyExists(err) {
+			if apierrors.IsAlreadyExists(err) {
 				existing, getErr := ri.Get(ctx, obj.GetName(), metav1.GetOptions{})
 				require.NoError(t, getErr, "get existing resource for replace in %s", path)
 				obj.SetResourceVersion(existing.GetResourceVersion())
@@ -129,6 +132,26 @@ func applyInputDir(t *testing.T, inputDir string) {
 		}
 	}
 	time.Sleep(500 * time.Millisecond)
+}
+
+// TestFetchKonfluxOpRecordsCRDNotInstalled covers the error-handling path in
+// fetch-konflux-op-records.sh (lines 35-41) when the Konflux CRD is absent
+// from the cluster. A fresh kwok cluster has no custom CRDs, so kubectl exits
+// non-zero and the script must exit 1 with an error message on stderr.
+// The run goes through testfixture.RunRepoScript so kcov instruments those lines.
+func TestFetchKonfluxOpRecordsCRDNotInstalled(t *testing.T) {
+	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
+		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
+		scriptAbs, err := filepath.Abs(scriptPath)
+		require.NoError(t, err)
+		_, runErr := testfixture.RunRepoScript(scriptAbs, nil, os.Environ())
+		require.Error(t, runErr, "script must exit non-zero when Konflux CRD is not installed")
+		var exitErr *exec.ExitError
+		require.True(t, errors.As(runErr, &exitErr),
+			"expected *exec.ExitError, got %T: %v", runErr, runErr)
+		assert.Equal(t, 1, exitErr.ExitCode(),
+			"script must exit 1 (not some other failure) when Konflux CRD is absent")
+	})
 }
 
 func TestFetchKonfluxOpRecords(t *testing.T) {

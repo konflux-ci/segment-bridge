@@ -9,6 +9,8 @@
 #
 set -o pipefail -o errexit -o nounset
 
+SELFDIR="$(cd "$(dirname "$0")" && pwd)"
+
 # ======= Parameters ======
 # The following variables can be set from outside the script by setting
 # similarly named environment variables.
@@ -63,15 +65,7 @@ TOKEN=$(get_token) || exit 1
 
 # Build tkn-results command (flags only — positional arg added at invocation
 # with a -- separator so "-/results/-" is never parsed as a flag)
-TKN_RESULTS_CMD=(
-  tkn-results
-  records
-  list
-  --addr "$TEKTON_RESULTS_API_ADDR"
-  --insecure
-  -o json
-  --limit "$TEKTON_LIMIT"
-)
+TKN_RESULTS_CMD=(tkn-results records list --addr "$TEKTON_RESULTS_API_ADDR" --insecure -o json --limit "$TEKTON_LIMIT")
 
 if [[ -n "$TOKEN" ]]; then
   TKN_RESULTS_CMD+=(--authtoken "$TOKEN")
@@ -81,10 +75,5 @@ fi
 # - Filter for PipelineRun records only (data.type == "tekton.dev/v1.PipelineRun")
 # - Base64 decode the payload (data.value)
 # - Output one PipelineRun JSON per line
-"${TKN_RESULTS_CMD[@]}" -- "${TEKTON_NAMESPACE}/results/-" 2>&1 | jq -c '
-  .records[]?
-  | select(.data.type == "tekton.dev/v1.PipelineRun")
-  | .data.value
-  | @base64d
-  | fromjson
-'
+"${TKN_RESULTS_CMD[@]}" -- "${TEKTON_NAMESPACE}/results/-" 2>&1 \
+  | jq -c -f "$SELFDIR/jq/filter-pipelineruns.jq"

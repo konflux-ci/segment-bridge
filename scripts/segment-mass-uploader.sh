@@ -22,6 +22,4 @@ SEGMENT_BATCH_DATA_SIZE="${SEGMENT_BATCH_DATA_SIZE:-$((490 * 1024))}"
 #
 # === End of parameters ===
 
-split \
-  --line-bytes "$SEGMENT_BATCH_DATA_SIZE" \
-  --filter="segment-uploader.sh"
+split --line-bytes "$SEGMENT_BATCH_DATA_SIZE" --filter="segment-uploader.sh"

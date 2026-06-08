@@ -23,6 +23,8 @@
 #
 set -o pipefail -o errexit -o nounset
 
+SELFDIR="$(cd "$(dirname "$0")" && pwd)"
+
 # ======= Parameters ======
 # The following variables can be set from outside the script by setting
 # similarly named environment variables.
@@ -88,67 +90,11 @@ transform_konflux_record() {
   local ns_hash="$2"
   local cluster_id_hash="$3"
 
-  echo "$record" | jq -c --arg ns_hash "$ns_hash" \
+  echo "$record" | jq -c -f "$SELFDIR/jq/transform-konflux.jq" \
+    --arg ns_hash "$ns_hash" \
     --arg cluster_id_hash "$cluster_id_hash" \
     --arg konflux_version "${KONFLUX_VERSION:-}" \
-    --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
-    # Ready condition (type=="Ready", status=="True")
-    ((.status.conditions // []) | map(select(.type == "Ready" and .status == "True")) | .[0]) as $ready |
-
-    (.metadata.creationTimestamp) as $startTime |
-    ($ready.lastTransitionTime) as $completionTime |
-
-    # Duration in seconds (null if timestamps missing)
-    (
-      if $startTime and $completionTime then
-        (($completionTime | fromdateiso8601) - ($startTime | fromdateiso8601))
-      else
-        null
-      end
-    ) as $duration |
-
-    ({
-      type: "track",
-      anonymousId: "anonymous",
-      context: (
-        {
-          library: {
-            name: "segment-bridge",
-            version: "2.0.0"
-          }
-        } + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
-      )
-    }) as $base |
-
-    (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
-    (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
-    (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end) as $k8sProp |
-
-    ({
-      namespaceHash: $ns_hash
-    } + $clusterProp + $konfluxProp + $k8sProp) as $commonProps |
-
-    # Event 1: Operator Deployment Started
-    ($base + {
-      messageId: (.metadata.uid + "-started"),
-      timestamp: $startTime,
-      event: "Operator Deployment Started",
-      properties: $commonProps
-    }),
-
-    # Event 2: Operator Deployment Completed
-    ($base + {
-      messageId: (.metadata.uid + "-completed"),
-      timestamp: $completionTime,
-      event: "Operator Deployment Completed",
-      properties: ($commonProps + {
-        startTime: $startTime,
-        completionTime: $completionTime,
-        durationSeconds: $duration,
-        status: ($ready.reason // "Unknown")
-      })
-    })
-  '
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}"
 }
 
 # transform_record: Transform a single PipelineRun JSON into two Segment events
@@ -164,73 +110,11 @@ transform_record() {
   local ns_hash="$2"
   local cluster_id_hash="$3"
 
-  echo "$record" | jq -c --arg ns_hash "$ns_hash" \
+  echo "$record" | jq -c -f "$SELFDIR/jq/transform-record.jq" \
+    --arg ns_hash "$ns_hash" \
     --arg cluster_id_hash "$cluster_id_hash" \
     --arg konflux_version "${KONFLUX_VERSION:-}" \
-    --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
-    # Extract completion status from conditions array
-    ((.status.conditions // []) | map(select(.type == "Succeeded")) | .[0]) as $cond |
-
-    # Calculate duration in seconds (null if timestamps missing)
-    (
-      if .status.completionTime and .status.startTime then
-        ((.status.completionTime | fromdateiso8601) - (.status.startTime | fromdateiso8601))
-      else
-        null
-      end
-    ) as $duration |
-
-    # Count child tasks/taskruns
-    ((.status.childReferences // []) | length) as $taskCount |
-
-    # Common base fields shared by both events
-    ({
-      type: "track",
-      anonymousId: "anonymous",
-      context: (
-        {
-          library: {
-            name: "segment-bridge",
-            version: "2.0.0"
-          }
-        } + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
-      )
-    }) as $base |
-
-    # Optional Konflux public info (only when env vars set)
-    (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
-    (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
-    (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end) as $k8sProp |
-
-    # Common properties shared by both events
-    ({
-      namespaceHash: $ns_hash,
-      taskCount: $taskCount,
-      hasPipelineLabel: (.metadata.labels["tekton.dev/pipeline"] != null),
-      pipelineType: .metadata.labels["pipelines.appstudio.openshift.io/type"]
-    } + $clusterProp + $konfluxProp + $k8sProp) as $commonProps |
-
-    # Event 1: PipelineRun Started
-    ($base + {
-      messageId: (.metadata.uid + "-started"),
-      timestamp: .status.startTime,
-      event: "PipelineRun Started",
-      properties: $commonProps
-    }),
-
-    # Event 2: PipelineRun Completed
-    ($base + {
-      messageId: (.metadata.uid + "-completed"),
-      timestamp: .status.completionTime,
-      event: "PipelineRun Completed",
-      properties: ($commonProps + {
-        startTime: .status.startTime,
-        completionTime: .status.completionTime,
-        durationSeconds: $duration,
-        status: ($cond.reason // "Unknown")
-      })
-    })
-  '
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}"
 }
 
 # transform_namespace_record: Transform a single Namespace JSON into one Segment event
@@ -246,35 +130,11 @@ transform_namespace_record() {
   local ns_hash="$2"
   local cluster_id_hash="$3"
 
-  echo "$record" | jq -c --arg ns_hash "$ns_hash" \
+  echo "$record" | jq -c -f "$SELFDIR/jq/transform-namespace.jq" \
+    --arg ns_hash "$ns_hash" \
     --arg cluster_id_hash "$cluster_id_hash" \
     --arg konflux_version "${KONFLUX_VERSION:-}" \
-    --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
-    ({
-      type: "track",
-      anonymousId: "anonymous",
-      context: (
-        {
-          library: {
-            name: "segment-bridge",
-            version: "2.0.0"
-          }
-        } + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
-      )
-    }) as $base |
-    (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
-    (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
-    (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end) as $k8sProp |
-    ({
-      namespaceHash: $ns_hash
-    } + $clusterProp + $konfluxProp + $k8sProp) as $props |
-    $base + {
-      messageId: (.metadata.uid + "-namespace-created"),
-      timestamp: .metadata.creationTimestamp,
-      event: "Namespace Created",
-      properties: $props
-    }
-  '
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}"
 }
 
 # transform_component_record: Transform a single Component JSON into one Segment event
@@ -292,39 +152,13 @@ transform_component_record() {
   local application_hash="$4"
   local cluster_id_hash="$5"
 
-  echo "$record" | jq -c --arg ns_hash "$ns_hash" \
+  echo "$record" | jq -c -f "$SELFDIR/jq/transform-component.jq" \
+    --arg ns_hash "$ns_hash" \
     --arg component_hash "$component_hash" \
     --arg application_hash "$application_hash" \
     --arg cluster_id_hash "$cluster_id_hash" \
     --arg konflux_version "${KONFLUX_VERSION:-}" \
-    --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
-    ({
-      type: "track",
-      anonymousId: "anonymous",
-      context: (
-        {
-          library: {
-            name: "segment-bridge",
-            version: "2.0.0"
-          }
-        } + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
-      )
-    }) as $base |
-    (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end) as $clusterProp |
-    (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end) as $konfluxProp |
-    (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end) as $k8sProp |
-    ({
-      namespaceHash: $ns_hash,
-      componentHash: $component_hash,
-      applicationHash: $application_hash
-    } + $clusterProp + $konfluxProp + $k8sProp) as $props |
-    $base + {
-      messageId: (.metadata.uid + "-component-created"),
-      timestamp: .metadata.creationTimestamp,
-      event: "Component Created",
-      properties: $props
-    }
-  '
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}"
 }
 
 # Precompute cluster ID hash when Konflux info will be added (so we never send raw cluster ID)
@@ -379,25 +213,8 @@ done
 # Emit a heartbeat event so Segment can tell this cluster is alive and
 # segment-bridge is running, even when no real records were processed.
 heartbeat_ts="${HEARTBEAT_TIMESTAMP:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
-jq -n -c \
+jq -n -c -f "$SELFDIR/jq/heartbeat.jq" \
   --arg cluster_id_hash "$cluster_id_hash" \
   --arg timestamp "$heartbeat_ts" \
   --arg konflux_version "${KONFLUX_VERSION:-}" \
-  --arg kubernetes_version "${KUBERNETES_VERSION:-}" '
-  {
-    type: "track",
-    anonymousId: "anonymous",
-    messageId: (if $cluster_id_hash != "" then ($cluster_id_hash + "-heartbeat-" + $timestamp) else ("heartbeat-" + $timestamp) end),
-    timestamp: $timestamp,
-    event: "Segment Bridge Heartbeat",
-    context: (
-      {library: {name: "segment-bridge", version: "2.0.0"}}
-      + (if $cluster_id_hash != "" then {device: {id: $cluster_id_hash}} else {} end)
-    ),
-    properties: (
-      (if $cluster_id_hash != "" then {clusterIdHash: $cluster_id_hash} else {} end)
-      + (if $konflux_version != "" then {konfluxVersion: $konflux_version} else {} end)
-      + (if $kubernetes_version != "" then {kubernetesVersion: $kubernetes_version} else {} end)
-    )
-  }
-'
+  --arg kubernetes_version "${KUBERNETES_VERSION:-}"

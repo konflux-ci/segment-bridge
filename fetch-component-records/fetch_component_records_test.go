@@ -17,6 +17,7 @@ import (
 	"github.com/redhat-appstudio/segment-bridge.git/containerfixture"
 	"github.com/redhat-appstudio/segment-bridge.git/kwok"
 	"github.com/redhat-appstudio/segment-bridge.git/scripts"
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -221,22 +222,19 @@ func TestFetchComponentRecords(t *testing.T) {
 // TestFetchComponentRecordsExitsZeroWhenComponentCRDNotInstalled ensures the
 // pipeline does not fail when the Component API is absent (no CRD on cluster).
 // Kwok starts without our test CRD; we never apply component-samples here.
+// Uses testfixture.RunRepoScriptWithStderr so the run goes through RunRepoScript
+// (kcov instruments the is_component_api_missing_error path) and stderr is
+// captured to verify the expected skip warning is emitted.
 func TestFetchComponentRecordsExitsZeroWhenComponentCRDNotInstalled(t *testing.T) {
 	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
 		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
 		now := time.Now().UTC().Format(time.RFC3339)
-		scriptAbs, err := filepath.Abs(scriptPath)
-		require.NoError(t, err)
-		cmd := exec.Command(scriptAbs)
-		cmd.Env = os.Environ()
-		cmd.Env = append(cmd.Env, "COMPONENT_NOW_ISO="+now)
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		out, err := cmd.Output()
+		merged := append(os.Environ(), "COMPONENT_NOW_ISO="+now)
+		out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, merged)
 		require.NoError(t, err,
-			"script must exit 0 when Component API is absent (stderr=%q)", stderr.String())
+			"script must exit 0 when Component API is absent (stderr=%q)", string(stderr))
 		assert.Empty(t, strings.TrimSpace(string(out)), "stdout must be empty when skipping")
-		assert.Contains(t, strings.ToLower(stderr.String()), "skipping",
+		assert.Contains(t, strings.ToLower(string(stderr)), "skipping",
 			"expected skip WARNING on stderr")
 	})
 }

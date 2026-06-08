@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,27 +21,42 @@ func writeStub(t *testing.T, dir, name, content string) {
 	require.NoError(t, os.WriteFile(p, []byte(content), 0o755))
 }
 
-// copyMainJob copies tekton-main-job.sh into dir so SELFDIR points at the stubs.
-func copyMainJob(t *testing.T, dir string) string {
+// linkMainJob creates a symlink to tekton-main-job.sh inside dir so that $0
+// resolves to the symlink path (SELFDIR = dir, finding the stubs), while kcov
+// can still resolve the real source inode for coverage tracking.
+func linkMainJob(t *testing.T, dir string) string {
 	t.Helper()
 	src, err := filepath.Abs(mainJobScript)
 	require.NoError(t, err)
-	data, err := os.ReadFile(src)
-	require.NoError(t, err)
 	dst := filepath.Join(dir, "tekton-main-job.sh")
-	require.NoError(t, os.WriteFile(dst, data, 0o755))
+	require.NoError(t, os.Symlink(src, dst))
 	return dst
 }
 
-// runMainJob executes tekton-main-job.sh from dir with SEGMENT_WRITE_KEY set
-// so that segment_sink invokes the stub segment-mass-uploader.sh (passthrough).
-func runMainJob(t *testing.T, scriptPath string) (stdout, stderr string, exitCode int) {
+// runMainJobWithEnv executes tekton-main-job.sh with the given environment.
+// When KCOV_OUTPUT_DIR is set and kcov is installed, the script is run under
+// kcov using scriptPath (the symlink) so that $0 resolves to the temp dir
+// (SELFDIR = temp dir, finding the stubs) while --include-path points to the
+// real scripts directory for coverage attribution.
+func runMainJobWithEnv(t *testing.T, scriptPath string, env []string) (stdout, stderr string, exitCode int) {
 	t.Helper()
-	cmd := exec.Command("bash", scriptPath)
-	cmd.Env = append(os.Environ(),
-		"SEGMENT_WRITE_KEY=test-key",
-		"SEGMENT_BATCH_API=https://example.com/v1/batch",
-	)
+	var cmd *exec.Cmd
+	if kcovDir := strings.TrimSpace(os.Getenv(testfixture.EnvKcovOutputDir)); kcovDir != "" {
+		if _, err := exec.LookPath("kcov"); err == nil {
+			absScript, err := filepath.Abs(mainJobScript)
+			require.NoError(t, err, "resolve absolute path of main job script for kcov")
+			cmd = exec.Command("kcov",
+				"--include-path="+filepath.Dir(absScript),
+				kcovDir,
+				scriptPath,
+			)
+			cmd.Env = env
+		}
+	}
+	if cmd == nil {
+		cmd = exec.Command("bash", scriptPath)
+		cmd.Env = env
+	}
 	var outBuf, errBuf strings.Builder
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
@@ -52,6 +68,17 @@ func runMainJob(t *testing.T, scriptPath string) (stdout, stderr string, exitCod
 		}
 	}
 	return outBuf.String(), errBuf.String(), exitCode
+}
+
+// runMainJob executes tekton-main-job.sh with SEGMENT_WRITE_KEY set so that
+// segment_sink invokes the stub segment-mass-uploader.sh (passthrough).
+func runMainJob(t *testing.T, scriptPath string) (stdout, stderr string, exitCode int) {
+	t.Helper()
+	env := append(os.Environ(),
+		"SEGMENT_WRITE_KEY=test-key",
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+	)
+	return runMainJobWithEnv(t, scriptPath, env)
 }
 
 func TestBestEffortFetchSources(t *testing.T) {
@@ -84,7 +111,7 @@ func TestBestEffortFetchSources(t *testing.T) {
 	writeStub(t, dir, "segment-mass-uploader.sh",
 		"#!/bin/bash\ncat\n")
 
-	script := copyMainJob(t, dir)
+	script := linkMainJob(t, dir)
 	stdout, stderr, exitCode := runMainJob(t, script)
 
 	assert.Equal(t, 0, exitCode,
@@ -121,7 +148,7 @@ func TestLastFetchFails(t *testing.T) {
 	writeStub(t, dir, "segment-mass-uploader.sh",
 		"#!/bin/bash\ncat\n")
 
-	script := copyMainJob(t, dir)
+	script := linkMainJob(t, dir)
 	stdout, stderr, exitCode := runMainJob(t, script)
 
 	assert.Equal(t, 0, exitCode,
@@ -149,7 +176,7 @@ func TestAllFetchSourcesFail(t *testing.T) {
 	writeStub(t, dir, "segment-mass-uploader.sh",
 		"#!/bin/bash\ncat\n")
 
-	script := copyMainJob(t, dir)
+	script := linkMainJob(t, dir)
 	stdout, stderr, exitCode := runMainJob(t, script)
 
 	assert.Equal(t, 0, exitCode,
@@ -158,4 +185,37 @@ func TestAllFetchSourcesFail(t *testing.T) {
 		"no events should be produced when all fetches fail")
 	assert.Contains(t, stderr, "simulated failure",
 		"stderr should contain fetch error messages")
+}
+
+func TestNoSegmentWriteKey(t *testing.T) {
+	dir := t.TempDir()
+
+	writeStub(t, dir, "fetch-tekton-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"tekton\"}'\n")
+	writeStub(t, dir, "fetch-konflux-op-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"op\"}'\n")
+	writeStub(t, dir, "fetch-namespace-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"ns\"}'\n")
+	writeStub(t, dir, "fetch-component-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"comp\"}'\n")
+
+	writeStub(t, dir, "get-konflux-public-info.sh",
+		"#!/bin/bash\nexec \"$@\"\n")
+	writeStub(t, dir, "tekton-to-segment.sh",
+		"#!/bin/bash\ncat\n")
+
+	// No segment-mass-uploader.sh stub — segment_sink should drain to /dev/null.
+
+	script := linkMainJob(t, dir)
+
+	// Omit SEGMENT_WRITE_KEY so the else-branch (cat > /dev/null) is exercised.
+	env := append(os.Environ(), "SEGMENT_BATCH_API=https://example.com/v1/batch")
+	stdout, stderr, exitCode := runMainJobWithEnv(t, script, env)
+
+	assert.Equal(t, 0, exitCode,
+		"main job should exit 0 when SEGMENT_WRITE_KEY is not set; stderr:\n%s", stderr)
+	assert.Empty(t, strings.TrimSpace(stdout),
+		"no upload output expected when SEGMENT_WRITE_KEY is absent")
+	assert.Contains(t, stderr, "No SEGMENT_WRITE_KEY configured",
+		"stderr should warn about missing write key")
 }

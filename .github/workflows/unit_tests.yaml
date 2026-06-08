@@ -54,6 +54,7 @@ jobs:
                 'go.mod',
                 'LICENSE',
                 'scripts/**/*.sh',
+                'scripts/**/*.jq',
                 'scripts/prepare-oc-client-for-build.sh'
               )
             }}

@@ -84,7 +84,7 @@ jobs:
           cd tekton-e2e
           go test -tags=e2e -v -coverprofile=coverage-e2e.out -covermode=atomic
       - name: Upload E2E coverage reports to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: e2e-tests

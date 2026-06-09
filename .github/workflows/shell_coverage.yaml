@@ -44,7 +44,7 @@ jobs:
           mkdir -p "$KCOV_OUTPUT_DIR"
           go test -short -v ./...
       - name: Upload shell coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: shell-scripts

@@ -1,18 +1,26 @@
-# This repo's product is shell scripts (scripts/*.sh). All Go code is
+# This repo's product is shell scripts (scripts/*.sh). Go paths below are
 # test infrastructure — fixtures, helpers, and mocks that exercise those
-# scripts. Excluding test-infra paths keeps the coverage metric honest
-# instead of measuring how much of the test harness is self-tested.
+# scripts. Makefile and README.md are build and documentation glue, not
+# executable product code. Excluding these keeps the metric focused on
+# shell scripts rather than harness, docs, or build wiring.
 ---
+codecov:
+  require_ci_to_pass: true
+
 coverage:
   status:
     project:
       default:
-        informational: true
+        target: 80%
+        threshold: 2%
     patch:
       default:
-        informational: true
+        target: 80%
+        threshold: 2%
 
 ignore:
+  - "Makefile"
+  - "README.md"
   - "testfixture/"
   - "containerfixture/"
   - "kwok/"

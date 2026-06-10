@@ -42,7 +42,38 @@ jobs:
       - name: Run Go tests with kcov shell instrumentation
         run: |
           mkdir -p "$KCOV_OUTPUT_DIR"
-          go test -short -v ./...
+          go test -v ./...
+      - name: Print per-file shell coverage summary
+        if: always()
+        run: |
+          XML="kcov-output/kcov-merged/cobertura.xml"
+          if [[ ! -f "$XML" ]]; then
+            echo "::warning::No cobertura.xml found at $XML"
+            exit 0
+          fi
+          echo "## Shell script coverage (kcov)"
+          python3 -c "
+          import xml.etree.ElementTree as ET, sys
+          tree = ET.parse('$XML')
+          root = tree.getroot()
+          print(f\"{'File':<55} {'Lines':>6} {'Hits':>6} {'Cov%':>6}\")
+          print('-' * 75)
+          total_lines = total_hits = 0
+          for pkg in root.findall('.//package'):
+              for cls in pkg.findall('.//class'):
+                  fn = cls.get('filename', '?')
+                  lines = cls.findall('lines/line')
+                  n = len(lines)
+                  h = sum(1 for l in lines if int(l.get('hits', 0)) > 0)
+                  pct = (h * 100 / n) if n else 0
+                  total_lines += n
+                  total_hits += h
+                  print(f'{fn:<55} {n:>6} {h:>6} {pct:>5.1f}%')
+          pct = (total_hits * 100 / total_lines) if total_lines else 0
+          print('-' * 75)
+          t = 'TOTAL'
+          print(f'{t:<55} {total_lines:>6} {total_hits:>6} {pct:>5.1f}%')
+          "
       - name: Upload shell coverage to Codecov
         uses: codecov/codecov-action@v7
         with:

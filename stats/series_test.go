@@ -54,3 +54,47 @@ func TestIntSeries(t *testing.T) {
 		})
 	}
 }
+
+func TestSeriesFormatFlags(t *testing.T) {
+	var series Series[int]
+	for _, sample := range []int{2, 8, 8} {
+		series.Add(sample)
+	}
+
+	tests := []struct {
+		name   string
+		format string
+		want   string
+	}{
+		{
+			name:   "sign flag",
+			format: "Stats: %+d",
+			want:   "Stats: min: +2 max: +8 avg: +6",
+		},
+		{
+			name:   "zero-pad flag",
+			format: "Stats: %05d",
+			want:   "Stats: min: 00002 max: 00008 avg: 00006",
+		},
+		{
+			name:   "space flag",
+			format: "Stats: % d",
+			want:   "Stats: min:  2 max:  8 avg:  6",
+		},
+		{
+			name:   "left-align flag",
+			format: "Stats: %-10d",
+			want:   "Stats: min: 2          max: 8          avg: 6         ",
+		},
+		{
+			name:   "alternate flag",
+			format: "Stats: %#x",
+			want:   "Stats: min: 0x2 max: 0x8 avg: 0x6",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, fmt.Sprintf(tt.format, series))
+		})
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/redhat-appstudio/segment-bridge.git/containerfixture"
 	"github.com/redhat-appstudio/segment-bridge.git/kwok"
 	"github.com/redhat-appstudio/segment-bridge.git/scripts"
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -282,4 +284,109 @@ func TestNamespaceTimeWindowFilter(t *testing.T) {
 	assert.Equal(t, "Namespace", ns["kind"])
 	name, _ := meta["name"].(string)
 	assert.Equal(t, "recent-ns", name)
+}
+
+func namespaceStubEnv(t *testing.T, kubectlPath string, extra map[string]string) []string {
+	t.Helper()
+	t.Setenv(testfixture.EnvTestImage, "")
+	env := os.Environ()
+	kubeconfig := filepath.Join(t.TempDir(), "kubeconfig")
+	require.NoError(t, os.WriteFile(kubeconfig, []byte(""), 0o600))
+	env = append(env, "KUBECONFIG="+kubeconfig)
+	env = append(env, "KUBECTL="+kubectlPath)
+	for k, v := range extra {
+		env = append(env, k+"="+v)
+	}
+	return env
+}
+
+func TestNamespaceKubectlNotFound(t *testing.T) {
+	t.Setenv(testfixture.EnvTestImage, "")
+	env := os.Environ()
+	env = append(env, "KUBECTL=/nonexistent/kubectl-binary")
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "not found in PATH")
+}
+
+func TestNamespaceNoKubectlNoOc(t *testing.T) {
+	env := testfixture.MinimalHostEnvWithoutKubectl(t)
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "oc or kubectl required")
+}
+
+func TestNamespaceKubectlError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	kubectl := filepath.Join(stubDir, "kubectl")
+	testfixture.WriteStub(t, stubDir, "kubectl", `#!/bin/bash
+echo 'Error from server: connection refused' >&2
+exit 1
+`)
+	env := namespaceStubEnv(t, kubectl, map[string]string{
+		"NAMESPACE_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "ERROR:")
+}
+
+func TestNamespaceJqFailure(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	kubectl := filepath.Join(stubDir, "kubectl")
+	testfixture.WriteStub(t, stubDir, "kubectl", `#!/bin/bash
+echo 'not json'
+exit 0
+`)
+	env := namespaceStubEnv(t, kubectl, map[string]string{
+		"NAMESPACE_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "jq failed")
+}
+
+func TestNamespaceKubectlWarnings(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	kubectl := filepath.Join(stubDir, "kubectl")
+	testfixture.WriteStub(t, stubDir, "kubectl", `#!/bin/bash
+echo '{"items":[]}'
+echo 'W0923 warning: deprecated API' >&2
+exit 0
+`)
+	env := namespaceStubEnv(t, kubectl, map[string]string{
+		"NAMESPACE_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(string(out)))
+	assert.Contains(t, string(stderr), "deprecated API")
+}
+
+func TestNamespaceEmptyResults(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	kubectl := filepath.Join(stubDir, "kubectl")
+	testfixture.WriteStub(t, stubDir, "kubectl", `#!/bin/bash
+echo '{"items":[]}'
+exit 0
+`)
+	env := namespaceStubEnv(t, kubectl, map[string]string{
+		"NAMESPACE_NOW_ISO":      "2024-06-01T12:00:00Z",
+		"NAMESPACE_RECENT_HOURS": "4",
+	})
+	out, err := testfixture.RunRepoScript(scriptPath, nil, env)
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(string(out)))
 }

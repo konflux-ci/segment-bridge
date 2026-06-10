@@ -15,6 +15,7 @@ import (
 	"github.com/redhat-appstudio/segment-bridge.git/containerfixture"
 	"github.com/redhat-appstudio/segment-bridge.git/kwok"
 	"github.com/redhat-appstudio/segment-bridge.git/scripts"
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -186,6 +187,56 @@ func getKubeSystemUID(t *testing.T, config *rest.Config) string {
 	ns, err := clientset.CoreV1().Namespaces().Get(context.Background(), "kube-system", metav1.GetOptions{})
 	require.NoError(t, err, "get kube-system namespace")
 	return string(ns.UID)
+}
+
+func publicInfoStubEnv(t *testing.T, stubDir string) []string {
+	t.Helper()
+	t.Setenv(testfixture.EnvTestImage, "")
+	return testfixture.EnvWithStubPath(stubDir)
+}
+
+func TestPublicInfoNoArgs(t *testing.T) {
+	t.Setenv(testfixture.EnvTestImage, "")
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, os.Environ())
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "usage:")
+}
+
+func TestPublicInfoNoKubectlNoOc(t *testing.T) {
+	env := testfixture.MinimalHostEnvWithoutKubectl(t)
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env, "true")
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "need oc or kubectl in PATH")
+}
+
+func TestPublicInfoConfigmapMissing(t *testing.T) {
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+if [[ "$*" == *"configmap"* ]]; then
+  exit 1
+elif [[ "$*" == *"namespace kube-system"* ]]; then
+  echo "test-uid-12345"
+  exit 0
+fi
+exit 1
+`)
+	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, publicInfoStubEnv(t, stubDir), "env")
+	require.NoError(t, err)
+	actual, err := parseEnv(string(out))
+	require.NoError(t, err)
+	assert.Equal(t, "test-uid-12345", actual["CLUSTER_ID"])
+	assert.Contains(t, string(stderr), "could not read konflux-public-info")
+}
+
+func TestPublicInfoAllFail(t *testing.T) {
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+exit 1
+`)
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, publicInfoStubEnv(t, stubDir), "env")
+	require.NoError(t, err)
+	assert.Contains(t, string(stderr), "could not read kube-system UID")
+	assert.Contains(t, string(stderr), "could not read konflux-public-info")
 }
 
 func TestGetKonfluxPublicInfo(t *testing.T) {

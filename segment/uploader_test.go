@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,6 +56,129 @@ func requireTools(t *testing.T) {
 	if err := exec.Command("split", "--version").Run(); err != nil {
 		t.Fatal("GNU coreutils split required (need --line-bytes and --filter support)")
 	}
+}
+
+func requireCurlAndJq(t *testing.T) {
+	t.Helper()
+	for _, tool := range []string{"curl", "jq"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Fatalf("Required tool %q not found in PATH", tool)
+		}
+	}
+}
+
+func requireJq(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Fatalf("Required tool %q not found in PATH", "jq")
+	}
+}
+
+func runScriptWithFileInput(t *testing.T, scriptPath, inputContent string, env []string) ([]byte, error) {
+	t.Helper()
+	// Host execution: temp stdin/netrc paths and httptest URLs are not
+	// bind-mounted when SEGMENT_BRIDGE_TEST_IMAGE is set (unit_tests CI).
+	t.Setenv(testfixture.EnvTestImage, "")
+	f, err := os.CreateTemp("", "test-input-*")
+	require.NoError(t, err)
+	defer os.Remove(f.Name())
+	_, err = f.WriteString(inputContent)
+	require.NoError(t, err)
+	_, err = f.Seek(0, 0)
+	require.NoError(t, err)
+	defer f.Close()
+	return testfixture.RunRepoScript(scriptPath, f, env)
+}
+
+func TestMkSegmentBatchPayload(t *testing.T) {
+	requireJq(t)
+	script, err := scripts.LookPath("mk-segment-batch-payload.sh")
+	require.NoError(t, err, "Failed to find script to test")
+
+	output, err := runScriptWithFileInput(
+		t, script, "{\"event\":\"test1\"}\n{\"event\":\"test2\"}\n", nil,
+	)
+	require.NoError(t, err)
+
+	var result segmentBatch
+	requireJSONDecode(
+		t, string(output), &result,
+		"Failed to decode batch payload",
+	)
+	require.Len(t, result.Batch, 2)
+	assert.Equal(t, "test1", result.Batch[0]["event"])
+	assert.Equal(t, "test2", result.Batch[1]["event"])
+}
+
+func TestMkSegmentBatchPayloadEmptyInput(t *testing.T) {
+	requireJq(t)
+	script, err := scripts.LookPath("mk-segment-batch-payload.sh")
+	require.NoError(t, err, "Failed to find script to test")
+
+	output, err := runScriptWithFileInput(t, script, "", nil)
+	require.NoError(t, err)
+
+	var result segmentBatch
+	requireJSONDecode(
+		t, string(output), &result,
+		"Failed to decode empty batch payload",
+	)
+	assert.Empty(t, result.Batch)
+	assert.Equal(t, "{\"batch\":[]}", strings.TrimSpace(string(output)))
+}
+
+func TestSegmentUploaderDirect(t *testing.T) {
+	requireCurlAndJq(t)
+	script, err := scripts.LookPath("segment-uploader.sh")
+	require.NoError(t, err, "Failed to find script to test")
+
+	inputContent := "{\"event\":\"test1\"}\n{\"event\":\"test2\"}\n"
+
+	reqs := webfixture.TraceRequestsFrom(func(url string, _ *http.Client) {
+		t.Setenv("SEGMENT_BATCH_API", url)
+		t.Setenv("SEGMENT_RETRIES", "1")
+
+		netrcPath := filepath.Join(t.TempDir(), ".netrc")
+		require.NoError(t, os.WriteFile(
+			netrcPath,
+			[]byte("machine 127.0.0.1 login test password \"\"\n"),
+			0o600,
+		))
+		t.Setenv("CURL_NETRC", netrcPath)
+
+		_, err := runScriptWithFileInput(t, script, inputContent, nil)
+		require.NoError(t, err)
+	})
+
+	require.Len(t, reqs, 1)
+	assert.Equal(t, "POST", reqs[0].Method)
+
+	var reqData segmentBatch
+	requireJSONDecode(
+		t, reqs[0].Body, &reqData,
+		"Failed to decode sent request JSON",
+	)
+	require.Len(t, reqData.Batch, 2)
+	assert.Equal(t, "test1", reqData.Batch[0]["event"])
+	assert.Equal(t, "test2", reqData.Batch[1]["event"])
+}
+
+func TestSegmentUploaderMissingNetrc(t *testing.T) {
+	requireCurlAndJq(t)
+	script, err := scripts.LookPath("segment-uploader.sh")
+	require.NoError(t, err, "Failed to find script to test")
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer svr.Close()
+
+	t.Setenv("SEGMENT_BATCH_API", svr.URL)
+	t.Setenv("SEGMENT_RETRIES", "1")
+	t.Setenv("CURL_NETRC", filepath.Join(t.TempDir(), "missing-netrc"))
+
+	_, err = runScriptWithFileInput(t, script, "{\"event\":\"test\"}\n", nil)
+	require.Error(t, err)
 }
 
 func TestUploader(t *testing.T) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,13 +14,6 @@ import (
 )
 
 const mainJobScript = "../scripts/tekton-main-job.sh"
-
-// writeStub creates an executable shell script in dir with the given content.
-func writeStub(t *testing.T, dir, name, content string) {
-	t.Helper()
-	p := filepath.Join(dir, name)
-	require.NoError(t, os.WriteFile(p, []byte(content), 0o755))
-}
 
 // linkMainJob creates a symlink to tekton-main-job.sh inside dir so that $0
 // resolves to the symlink path (SELFDIR = dir, finding the stubs), while kcov
@@ -86,29 +80,29 @@ func TestBestEffortFetchSources(t *testing.T) {
 
 	// -- Fetch stubs --
 	// fetch-tekton-records.sh: FAILS (exit 1), stderr only
-	writeStub(t, dir, "fetch-tekton-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-tekton-records.sh",
 		"#!/bin/bash\necho 'ERROR: simulated tekton-results failure' >&2\nexit 1\n")
 
 	// fetch-konflux-op-records.sh: succeeds, outputs marker
-	writeStub(t, dir, "fetch-konflux-op-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-konflux-op-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"op\"}'\n")
 
 	// fetch-namespace-records.sh: succeeds, outputs marker
-	writeStub(t, dir, "fetch-namespace-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-namespace-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"ns\"}'\n")
 
 	// fetch-component-records.sh: succeeds, outputs marker
-	writeStub(t, dir, "fetch-component-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-component-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"comp\"}'\n")
 
 	// -- Downstream stubs (passthrough) --
-	writeStub(t, dir, "get-konflux-public-info.sh",
+	testfixture.WriteStub(t, dir, "get-konflux-public-info.sh",
 		"#!/bin/bash\nexec \"$@\"\n")
 
-	writeStub(t, dir, "tekton-to-segment.sh",
+	testfixture.WriteStub(t, dir, "tekton-to-segment.sh",
 		"#!/bin/bash\ncat\n")
 
-	writeStub(t, dir, "segment-mass-uploader.sh",
+	testfixture.WriteStub(t, dir, "segment-mass-uploader.sh",
 		"#!/bin/bash\ncat\n")
 
 	script := linkMainJob(t, dir)
@@ -131,21 +125,21 @@ func TestBestEffortFetchSources(t *testing.T) {
 func TestLastFetchFails(t *testing.T) {
 	dir := t.TempDir()
 
-	writeStub(t, dir, "fetch-tekton-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-tekton-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"tekton\"}'\n")
-	writeStub(t, dir, "fetch-konflux-op-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-konflux-op-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"op\"}'\n")
-	writeStub(t, dir, "fetch-namespace-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-namespace-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"ns\"}'\n")
 	// Last fetch fails
-	writeStub(t, dir, "fetch-component-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-component-records.sh",
 		"#!/bin/bash\necho 'ERROR: component API missing' >&2\nexit 1\n")
 
-	writeStub(t, dir, "get-konflux-public-info.sh",
+	testfixture.WriteStub(t, dir, "get-konflux-public-info.sh",
 		"#!/bin/bash\nexec \"$@\"\n")
-	writeStub(t, dir, "tekton-to-segment.sh",
+	testfixture.WriteStub(t, dir, "tekton-to-segment.sh",
 		"#!/bin/bash\ncat\n")
-	writeStub(t, dir, "segment-mass-uploader.sh",
+	testfixture.WriteStub(t, dir, "segment-mass-uploader.sh",
 		"#!/bin/bash\ncat\n")
 
 	script := linkMainJob(t, dir)
@@ -164,16 +158,16 @@ func TestAllFetchSourcesFail(t *testing.T) {
 	dir := t.TempDir()
 
 	failStub := "#!/bin/bash\necho 'ERROR: simulated failure' >&2\nexit 1\n"
-	writeStub(t, dir, "fetch-tekton-records.sh", failStub)
-	writeStub(t, dir, "fetch-konflux-op-records.sh", failStub)
-	writeStub(t, dir, "fetch-namespace-records.sh", failStub)
-	writeStub(t, dir, "fetch-component-records.sh", failStub)
+	testfixture.WriteStub(t, dir, "fetch-tekton-records.sh", failStub)
+	testfixture.WriteStub(t, dir, "fetch-konflux-op-records.sh", failStub)
+	testfixture.WriteStub(t, dir, "fetch-namespace-records.sh", failStub)
+	testfixture.WriteStub(t, dir, "fetch-component-records.sh", failStub)
 
-	writeStub(t, dir, "get-konflux-public-info.sh",
+	testfixture.WriteStub(t, dir, "get-konflux-public-info.sh",
 		"#!/bin/bash\nexec \"$@\"\n")
-	writeStub(t, dir, "tekton-to-segment.sh",
+	testfixture.WriteStub(t, dir, "tekton-to-segment.sh",
 		"#!/bin/bash\ncat\n")
-	writeStub(t, dir, "segment-mass-uploader.sh",
+	testfixture.WriteStub(t, dir, "segment-mass-uploader.sh",
 		"#!/bin/bash\ncat\n")
 
 	script := linkMainJob(t, dir)
@@ -187,21 +181,97 @@ func TestAllFetchSourcesFail(t *testing.T) {
 		"stderr should contain fetch error messages")
 }
 
+func TestRealTransformPipeline(t *testing.T) {
+	dir := t.TempDir()
+
+	pipelineRunJSON := `{"apiVersion":"tekton.dev/v1","kind":"PipelineRun","metadata":{"name":"test-run","namespace":"test-ns","creationTimestamp":"2026-01-01T00:00:00Z"},"status":{"startTime":"2026-01-01T00:00:00Z","completionTime":"2026-01-01T00:05:00Z","conditions":[{"type":"Succeeded","status":"True","reason":"Succeeded"}]},"spec":{"pipelineRef":{"name":"build"}}}`
+
+	testfixture.WriteStub(t, dir, "fetch-tekton-records.sh",
+		"#!/bin/bash\necho '"+pipelineRunJSON+"'\n")
+	testfixture.WriteStub(t, dir, "fetch-konflux-op-records.sh",
+		"#!/bin/bash\n")
+	testfixture.WriteStub(t, dir, "fetch-namespace-records.sh",
+		"#!/bin/bash\n")
+	testfixture.WriteStub(t, dir, "fetch-component-records.sh",
+		"#!/bin/bash\n")
+
+	realScriptsDir, err := filepath.Abs("../scripts")
+	require.NoError(t, err)
+
+	// Symlink real get-konflux-public-info.sh and tekton-to-segment.sh
+	// so they run under kcov in the same session as tekton-main-job.sh.
+	require.NoError(t, os.Symlink(
+		filepath.Join(realScriptsDir, "get-konflux-public-info.sh"),
+		filepath.Join(dir, "get-konflux-public-info.sh"),
+	))
+	require.NoError(t, os.Symlink(
+		filepath.Join(realScriptsDir, "tekton-to-segment.sh"),
+		filepath.Join(dir, "tekton-to-segment.sh"),
+	))
+	// tekton-to-segment.sh sources jq scripts via SELFDIR; symlink the jq dir.
+	require.NoError(t, os.Symlink(
+		filepath.Join(realScriptsDir, "jq"),
+		filepath.Join(dir, "jq"),
+	))
+
+	testfixture.WriteStub(t, dir, "segment-mass-uploader.sh",
+		"#!/bin/bash\ncat\n")
+
+	// kubectl stub that provides minimal cluster info for get-konflux-public-info.sh.
+	testfixture.WriteStub(t, dir, "kubectl", `#!/bin/bash
+if [[ "$*" == *"configmap"* ]]; then
+  exit 1
+elif [[ "$*" == *"namespace kube-system"* ]]; then
+  echo "test-cluster-uid"
+  exit 0
+fi
+exit 1
+`)
+
+	script := linkMainJob(t, dir)
+	env := append(os.Environ(),
+		"SEGMENT_WRITE_KEY=test-key",
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+		"HEARTBEAT_TIMESTAMP=2026-01-01T00:10:00Z",
+	)
+	stdout, stderr, exitCode := runMainJobWithEnv(t, script, env)
+
+	assert.Equal(t, 0, exitCode,
+		"real-pipeline test should exit 0; stderr:\n%s", stderr)
+
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	var nonEmpty []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			nonEmpty = append(nonEmpty, strings.TrimSpace(line))
+		}
+	}
+	// PipelineRun produces 2 events (Started + Completed) + 1 heartbeat = 3
+	require.GreaterOrEqual(t, len(nonEmpty), 3,
+		"expected at least 3 output lines (Started + Completed + Heartbeat)")
+
+	for _, line := range nonEmpty {
+		var event map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(line), &event),
+			"each output line must be valid JSON")
+	}
+}
+
 func TestNoSegmentWriteKey(t *testing.T) {
 	dir := t.TempDir()
 
-	writeStub(t, dir, "fetch-tekton-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-tekton-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"tekton\"}'\n")
-	writeStub(t, dir, "fetch-konflux-op-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-konflux-op-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"op\"}'\n")
-	writeStub(t, dir, "fetch-namespace-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-namespace-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"ns\"}'\n")
-	writeStub(t, dir, "fetch-component-records.sh",
+	testfixture.WriteStub(t, dir, "fetch-component-records.sh",
 		"#!/bin/bash\necho '{\"marker\":\"comp\"}'\n")
 
-	writeStub(t, dir, "get-konflux-public-info.sh",
+	testfixture.WriteStub(t, dir, "get-konflux-public-info.sh",
 		"#!/bin/bash\nexec \"$@\"\n")
-	writeStub(t, dir, "tekton-to-segment.sh",
+	testfixture.WriteStub(t, dir, "tekton-to-segment.sh",
 		"#!/bin/bash\ncat\n")
 
 	// No segment-mass-uploader.sh stub — segment_sink should drain to /dev/null.

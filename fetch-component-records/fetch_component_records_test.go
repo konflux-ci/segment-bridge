@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -304,4 +305,170 @@ func TestComponentTimeWindowFilter(t *testing.T) {
 	assert.Equal(t, "Component", comp["kind"])
 	name, _ := meta["name"].(string)
 	assert.Equal(t, "recent-comp", name)
+}
+
+func componentStubEnv(t *testing.T, stubDir string, extra map[string]string) []string {
+	t.Helper()
+	t.Setenv(testfixture.EnvTestImage, "")
+	env := testfixture.EnvWithStubPath(stubDir)
+	kubeconfig := filepath.Join(t.TempDir(), "kubeconfig")
+	require.NoError(t, os.WriteFile(kubeconfig, []byte(""), 0o600))
+	env = append(env, "KUBECONFIG="+kubeconfig)
+	for k, v := range extra {
+		env = append(env, k+"="+v)
+	}
+	return env
+}
+
+func TestComponentAPIMissingError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo 'error: the server doesn'\''t have a resource type "components.appstudio.redhat.com"' >&2
+exit 1
+`)
+	env := componentStubEnv(t, stubDir, map[string]string{
+		"COMPONENT_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(string(out)))
+	assert.Contains(t, strings.ToLower(string(stderr)), "warning")
+	assert.Contains(t, strings.ToLower(string(stderr)), "skipping")
+}
+
+func TestComponentRBACForbidden(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo 'Error from server (Forbidden): components.appstudio.redhat.com is forbidden' >&2
+exit 1
+`)
+	env := componentStubEnv(t, stubDir, map[string]string{
+		"COMPONENT_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, strings.ToLower(string(stderr)), "error")
+	assert.Contains(t, string(stderr), "forbidden")
+}
+
+func TestComponentJqFailure(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo 'not json'
+exit 0
+`)
+	env := componentStubEnv(t, stubDir, map[string]string{
+		"COMPONENT_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "jq failed")
+}
+
+func TestComponentKubectlWarnings(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo '{"items":[]}'
+echo 'W0923 warning: deprecated API' >&2
+exit 0
+`)
+	env := componentStubEnv(t, stubDir, map[string]string{
+		"COMPONENT_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(string(out)))
+	assert.Contains(t, string(stderr), "deprecated API")
+}
+
+func TestComponentEmptyResults(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo '{"items":[]}'
+exit 0
+`)
+	env := componentStubEnv(t, stubDir, map[string]string{
+		"COMPONENT_NOW_ISO":      "2024-06-01T12:00:00Z",
+		"COMPONENT_RECENT_HOURS": "4",
+	})
+	out, err := testfixture.RunRepoScript(scriptPath, nil, env)
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(string(out)))
+}
+
+func TestComponentAPIFQNameNotFound(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo 'error: the server could not find the requested resource "components.appstudio.redhat.com"' >&2
+exit 1
+`)
+	env := componentStubEnv(t, stubDir, map[string]string{
+		"COMPONENT_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(string(out)))
+	assert.Contains(t, strings.ToLower(string(stderr)), "warning")
+	assert.Contains(t, strings.ToLower(string(stderr)), "skipping")
+}
+
+func TestComponentAPINoMatchesForKind(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo 'error: no matches for kind "Component" in version "appstudio.redhat.com/v1alpha1"' >&2
+exit 1
+`)
+	env := componentStubEnv(t, stubDir, map[string]string{
+		"COMPONENT_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(string(out)))
+	assert.Contains(t, strings.ToLower(string(stderr)), "warning")
+	assert.Contains(t, strings.ToLower(string(stderr)), "skipping")
+}
+
+func TestComponentAPIGenericError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires GNU date -d (Linux only)")
+	}
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo 'Error: connection timed out' >&2
+exit 1
+`)
+	env := componentStubEnv(t, stubDir, map[string]string{
+		"COMPONENT_NOW_ISO": "2024-06-01T12:00:00Z",
+	})
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, strings.ToLower(string(stderr)), "error")
+}
+
+func TestComponentNoKubectlNoOc(t *testing.T) {
+	env := testfixture.MinimalHostEnvWithoutKubectl(t)
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "oc or kubectl required")
 }

@@ -59,7 +59,7 @@ func (s Series[T]) Format(f fmt.State, verb rune) {
 
 func rebuildFmtStr(f fmt.State, verb rune) string {
 	fldFmtStr := "%"
-	for flag := range [...]int{'+', '=', '#', ' ', '0'} {
+	for _, flag := range [...]int{'+', '-', '#', ' ', '0'} {
 		if f.Flag(flag) {
 			fldFmtStr += string(rune(flag))
 		}

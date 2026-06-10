@@ -99,21 +99,20 @@ func TestFetchTektonRecordsEmpty(t *testing.T) {
 	assert.Empty(t, strings.TrimSpace(string(out)), "empty record list should produce no output")
 }
 
-// TestFetchTektonRecordsNoToken verifies that the script exits non-zero when
-// neither TEKTON_RESULTS_TOKEN nor a readable SA token file is available.
-func TestFetchTektonRecordsNoToken(t *testing.T) {
-	mockDir := buildMockTknResults(t)
-
-	_, err := runFetchTekton(t, mockDir, "testdata/records-empty.json", map[string]string{
-		"TEKTON_RESULTS_TOKEN": "",
-		"SA_TOKEN_PATH":        "/nonexistent/path/token",
-	})
-	require.Error(t, err, "script must fail when no token is available")
+func runFetchTektonWithStderr(t *testing.T, mockDir, responseFile string, extraEnv map[string]string) ([]byte, []byte, error) {
+	t.Helper()
+	absResponseFile, err := filepath.Abs(responseFile)
+	require.NoError(t, err)
+	env := os.Environ()
+	env = append(env, "PATH="+mockDir+":"+os.Getenv("PATH"))
+	env = append(env, "MOCK_TKN_RESULTS_RESPONSE_FILE="+absResponseFile)
+	for k, v := range extraEnv {
+		env = append(env, k+"="+v)
+	}
+	return testfixture.RunRepoScriptWithStderr(fetchTektonScript, nil, env)
 }
 
-// TestFetchTektonRecordsSAToken verifies that a token read from the SA token
-// file (SA_TOKEN_PATH) is accepted and produces correct output.
-func TestFetchTektonRecordsSAToken(t *testing.T) {
+func TestFetchTektonRecordsSATokenFallback(t *testing.T) {
 	mockDir := buildMockTknResults(t)
 
 	tokenFile := filepath.Join(t.TempDir(), "token")
@@ -128,4 +127,15 @@ func TestFetchTektonRecordsSAToken(t *testing.T) {
 
 	lines := nonEmptyLines(out)
 	assert.Len(t, lines, 2, "SA token path: expected 2 PipelineRun lines, got %d", len(lines))
+}
+
+func TestFetchTektonRecordsNoToken(t *testing.T) {
+	mockDir := buildMockTknResults(t)
+
+	_, stderr, err := runFetchTektonWithStderr(t, mockDir, "testdata/records-empty.json", map[string]string{
+		"TEKTON_RESULTS_TOKEN": "",
+		"SA_TOKEN_PATH":        "/nonexistent/path/token",
+	})
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "No authentication token available")
 }

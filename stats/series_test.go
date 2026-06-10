@@ -38,6 +38,19 @@ func TestIntSeries(t *testing.T) {
 				str:   "Stats: min:   2 max:   8 avg:   6",
 			},
 		},
+		{
+			name:    "decreasing values update min",
+			samples: []int{8, 2, 5},
+			format:  "%d",
+			want: results{
+				len:   3,
+				min:   2,
+				max:   8,
+				total: 15,
+				avg:   5,
+				str:   "min: 2 max: 8 avg: 5",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -53,6 +66,15 @@ func TestIntSeries(t *testing.T) {
 			assert.Equal(t, tt.want.str, fmt.Sprintf(tt.format, series))
 		})
 	}
+}
+
+func TestSeriesFormatPrecision(t *testing.T) {
+	var s Series[float64]
+	for _, v := range []float64{8.0, 2.0, 5.0} {
+		s.Add(v)
+	}
+	assert.Equal(t, "min: 2.00 max: 8.00 avg: 5.00", fmt.Sprintf("%.2f", s))
+	assert.Equal(t, "min: 2 max: 8 avg: 5", fmt.Sprintf("%.0f", s))
 }
 
 func TestSeriesFormatFlags(t *testing.T) {

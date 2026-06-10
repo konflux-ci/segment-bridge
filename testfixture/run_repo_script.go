@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"testing"
 )
 
 // Environment variables controlling optional container execution for script tests.
@@ -33,6 +34,75 @@ var bundledScriptBaseNames = map[string]struct{}{
 	"segment-mass-uploader.sh":    {},
 	"mk-segment-batch-payload.sh": {},
 	"tekton-main-job.sh":          {},
+}
+
+// WriteStub writes an executable shell script named name into dir with the
+// given content. It is the shared implementation of the per-package writeStub
+// helpers used by stub-based script tests.
+func WriteStub(t *testing.T, dir, name, content string) {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.WriteFile(p, []byte(content), 0o755); err != nil {
+		t.Fatalf("WriteStub: %v", err)
+	}
+}
+
+// WriteKubectlOcStubs writes identical kubectl and oc stubs into dir.
+func WriteKubectlOcStubs(t *testing.T, dir, content string) {
+	t.Helper()
+	WriteStub(t, dir, "kubectl", content)
+	WriteStub(t, dir, "oc", content)
+}
+
+// EnvWithStubPath returns a copy of os.Environ with stubDir prepended to PATH.
+// The caller is responsible for setting KUBECONFIG and other script-specific
+// variables on top of this base env.
+func EnvWithStubPath(stubDir string) []string {
+	env := os.Environ()
+	result := make([]string, 0, len(env))
+	for _, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			result = append(result, "PATH="+stubDir+":"+strings.TrimPrefix(e, "PATH="))
+		} else {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
+// MinimalHostEnvWithoutKubectl returns env for host script runs where bash must
+// be on PATH (for kcov/shebang) but kubectl and oc should not be found.
+// It builds a temp directory with symlinks to every executable in /bin and
+// /usr/bin except kubectl and oc, so the test works even on CI runners where
+// kubectl is installed system-wide.
+func MinimalHostEnvWithoutKubectl(t *testing.T) []string {
+	t.Helper()
+	t.Setenv(EnvTestImage, "")
+	stubDir := t.TempDir()
+
+	excluded := map[string]struct{}{"kubectl": {}, "oc": {}}
+	for _, dir := range []string{"/bin", "/usr/bin"} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if _, skip := excluded[name]; skip {
+				continue
+			}
+			dst := filepath.Join(stubDir, name)
+			if _, err := os.Lstat(dst); err == nil {
+				continue
+			}
+			_ = os.Symlink(filepath.Join(dir, name), dst)
+		}
+	}
+
+	return []string{
+		"PATH=" + stubDir,
+		"HOME=" + stubDir,
+	}
 }
 
 // ScriptBundledInBridgeImage reports whether basename matches a script installed under /usr/local/bin in the bridge image.

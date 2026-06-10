@@ -165,6 +165,60 @@ func TestFetchKonfluxOpRecordsCRDNotInstalled(t *testing.T) {
 	})
 }
 
+func konfluxStubEnv(t *testing.T, stubDir string) []string {
+	t.Helper()
+	t.Setenv(testfixture.EnvTestImage, "")
+	return testfixture.EnvWithStubPath(stubDir)
+}
+
+func TestKonfluxCRNotFound(t *testing.T) {
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo 'Error from server (NotFound): konfluxes.konflux.konflux-ci.dev "konflux" not found' >&2
+exit 1
+`)
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, konfluxStubEnv(t, stubDir))
+	require.Error(t, err)
+	assert.Contains(t, strings.ToLower(string(stderr)), "not found")
+}
+
+func TestKonfluxCROtherError(t *testing.T) {
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+echo 'Error from server (Forbidden): access denied' >&2
+exit 1
+`)
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, konfluxStubEnv(t, stubDir))
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "ERROR:")
+}
+
+func TestKonfluxCREmptyOutput(t *testing.T) {
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+exit 0
+`)
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, konfluxStubEnv(t, stubDir))
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "Failed to get")
+}
+
+func TestKonfluxCRNoKubectl(t *testing.T) {
+	t.Setenv(testfixture.EnvTestImage, "")
+	env := os.Environ()
+	env = append(env, "KUBECTL=/nonexistent/kubectl-binary")
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "not found in PATH")
+}
+
+func TestKonfluxCRNoKubectlNoOc(t *testing.T) {
+	env := testfixture.MinimalHostEnvWithoutKubectl(t)
+	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "oc or kubectl required")
+}
+
 func TestFetchKonfluxOpRecords(t *testing.T) {
 	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
 		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))

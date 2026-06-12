@@ -10,7 +10,7 @@ for full setup, testing, and review guidelines.
 
 ```bash
 make setup          # install toolchain via mise, run pre-commit
-make test           # go test ./... with pinned Go
+make test           # go test -race ./... with pinned Go
 make lint           # golangci-lint run
 make pre-commit     # yamllint, shellcheck, gitlint, go-mod-tidy, golangci-lint
 

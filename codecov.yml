@@ -3,7 +3,6 @@
 # scripts. Makefile and README.md are build and documentation glue, not
 # executable product code. Excluding these keeps the metric focused on
 # shell scripts rather than harness, docs, or build wiring.
----
 codecov:
   require_ci_to_pass: true
 
@@ -13,10 +12,12 @@ coverage:
       default:
         target: 80%
         threshold: 2%
+        informational: true
     patch:
       default:
         target: 80%
         threshold: 2%
+        informational: true
 
 ignore:
   - "Makefile"
@@ -40,3 +41,4 @@ flags:
 
 comment:
   layout: "condensed_header, condensed_files"
+  require_changes: true

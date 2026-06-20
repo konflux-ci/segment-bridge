@@ -32,7 +32,7 @@ repos:
         # the .markdownlint.json file relaxes line length on tables.
         exclude: ^(\.agentready/.*|\.cursor/.*)$
     repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.48.0
+    rev: v0.49.0
   - hooks:
       - id: go-mod-tidy
     repo: https://github.com/dnephin/pre-commit-golang

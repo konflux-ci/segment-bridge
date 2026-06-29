@@ -31,7 +31,7 @@ jobs:
           sudo apt-get install -y podman
       - name: Cache OpenShift client tarball (deps/generic)
         id: cache-oc-tarball
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: deps/generic
           key: >-
@@ -44,7 +44,7 @@ jobs:
         run: ./scripts/prepare-oc-client-for-build.sh
       - name: Cache segment-bridge test image tarball
         id: cache-bridge-image
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: segment-bridge-test-image.tar
           key: >-

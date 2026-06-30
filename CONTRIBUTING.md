@@ -156,10 +156,10 @@ both are installed; otherwise `podman` is tried first, then `docker`.
 #### Test Coverage
 
 CI generates a coverage profile (`coverage.out`) and uploads it to
-[Codecov](https://about.codecov.io/). Status checks enforce the targets
-in `codecov.yml`: 80% overall project coverage and 80% on lines changed
-in each PR. Failing checks block merging when branch protection requires
-them. To generate a local coverage report:
+[Codecov](https://about.codecov.io/). Status checks report against the
+targets in `codecov.yml` (80% overall project coverage and 80% on lines
+changed in each PR) but are set to `informational: true` — they provide
+visibility without blocking merges. To generate a local coverage report:
 
 ```bash
 go test -coverprofile=coverage.out ./...

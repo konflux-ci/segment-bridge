@@ -11,6 +11,8 @@ line-length=72
 [body-first-line-empty]
 
 # Bot users tend to generate invalid commits (no body, no Signed-off-by).
+# "fullsend" matches all fullsend bot accounts, including fullsend-code
+# (fullsend-ai-coder[bot]'s git author name), not just fullsend-ai-fullsend.
 [ignore-by-author-name]
-regex=(dependabot|red-hat-trusted-app-pipeline|red-hat-konflux|fullsend-ai-fullsend|\[bot\])
+regex=(dependabot|red-hat-trusted-app-pipeline|red-hat-konflux|fullsend|\[bot\])
 ignore=all

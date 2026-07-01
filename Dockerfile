@@ -32,7 +32,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOBIN=/build \
 # Konflux mounts the Hermeto prefetch output at /cachi2; the tarball is not in the
 # build context, so we must use RUN to read from the mounted path (not COPY).
 # Only the extracted binaries are copied to the final image.
-FROM registry.access.redhat.com/ubi9/ubi-minimal:1782708608 AS oc-client
+FROM registry.access.redhat.com/ubi9/ubi-minimal:1782797355 AS oc-client
 ARG TARGETARCH
 RUN microdnf install -y --nodocs tar gzip && microdnf clean all && rm -rf /var/cache/yum
 RUN cp "/cachi2/output/deps/generic/openshift-client-linux-${TARGETARCH:-amd64}-rhel9.tar.gz" /tmp/oc.tar.gz && \
@@ -41,7 +41,7 @@ RUN cp "/cachi2/output/deps/generic/openshift-client-linux-${TARGETARCH:-amd64}-
     rm /tmp/oc.tar.gz
 
 # Third stage: Create the final container image
-FROM registry.access.redhat.com/ubi9/ubi-minimal:1782708608
+FROM registry.access.redhat.com/ubi9/ubi-minimal:1782797355
 
 LABEL \
     description="Tekton Results to Segment bridge for anonymous PipelineRun telemetry" \

@@ -5,4 +5,5 @@ resources:
   - namespace.yaml
   - serviceaccount.yaml
   - rbac.yaml
+  - cursor-rbac.yaml
   - cronjob.yaml

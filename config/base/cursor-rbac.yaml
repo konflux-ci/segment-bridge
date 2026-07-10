@@ -1,0 +1,54 @@
+---
+# fetch-tekton-records.sh: read/write the cursor ConfigMap that persists
+# max(create_time) between CronJob runs (see read_cursor/write_cursor).
+# ConfigMaps are namespaced, so this is a namespaced Role scoped to the
+# segment-bridge namespace rather than the cluster-scoped ClusterRole.
+#
+# The "segment-bridge-cursor" resourceName below must match the script's
+# TEKTON_CURSOR_CONFIGMAP default (scripts/fetch-tekton-records.sh). If
+# TEKTON_CURSOR_CONFIGMAP or TEKTON_CURSOR_NAMESPACE is ever overridden
+# (e.g. via the segment-bridge-config Secret in config/base/cronjob.yaml),
+# update this Role (and its namespace) to match, or read_cursor/write_cursor
+# will get Forbidden on get/patch even though create still succeeds.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/name: segment-bridge
+  name: segment-bridge-cursor
+  namespace: segment-bridge
+rules:
+  # kubectl apply (used by write_cursor) only ever performs get+patch (or
+  # get+create when absent) — no verb reaches "update".
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - segment-bridge-cursor
+    verbs:
+      - get
+      - patch
+  # "create" cannot be scoped to resourceNames (object doesn't exist yet).
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: segment-bridge
+  name: segment-bridge-cursor
+  namespace: segment-bridge
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: segment-bridge-cursor
+subjects:
+  - kind: ServiceAccount
+    name: segment-bridge
+    namespace: segment-bridge

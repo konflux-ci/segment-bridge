@@ -1,5 +1,5 @@
 ---
-name: Bot auto-merge
+name: Konflux bot auto-merge
 "on":
   pull_request:
     types:
@@ -13,27 +13,8 @@ permissions:
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
-    if: >-
-      github.actor == 'dependabot[bot]'
-      || github.actor == 'red-hat-konflux[bot]'
+    if: github.actor == 'red-hat-konflux[bot]'
     steps:
-      - name: Fetch Dependabot metadata
-        if: github.actor == 'dependabot[bot]'
-        id: metadata
-        uses: dependabot/fetch-metadata@v3
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Auto-merge Dependabot patch and minor updates
-        if: >-
-          github.actor == 'dependabot[bot]'
-          && (steps.metadata.outputs.update-type ==
-          'version-update:semver-patch'
-          || steps.metadata.outputs.update-type ==
-          'version-update:semver-minor')
-        run: gh pr merge --auto --merge "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Auto-merge Konflux non-major updates
         if: >-
           github.actor == 'red-hat-konflux[bot]'

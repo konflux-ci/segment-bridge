@@ -14,5 +14,5 @@ line-length=72
 # "fullsend" matches all fullsend bot accounts, including fullsend-code
 # (fullsend-ai-coder[bot]'s git author name), not just fullsend-ai-fullsend.
 [ignore-by-author-name]
-regex=(dependabot|red-hat-trusted-app-pipeline|red-hat-konflux|fullsend|\[bot\])
+regex=(red-hat-trusted-app-pipeline|red-hat-konflux|fullsend|\[bot\])
 ignore=all

@@ -13,7 +13,7 @@
 #
 # Usage:
 #   podman run --rm \
-#     -e TEKTON_RESULTS_API_ADDR=tekton-results-api-service:8080 \
+#     -e TEKTON_RESULTS_API_ADDR=https://tekton-results-api-service:8443 \
 #     -e TEKTON_NAMESPACE=default \
 #     -e TEKTON_RESULTS_TOKEN="$(kubectl create token default -n default)" \
 #     -e SEGMENT_BATCH_API=https://api.segment.io/v1/batch \
@@ -21,14 +21,7 @@
 #     segment-bridge
 #
 
-# First stage: Build the tkn-results binary
-FROM registry.access.redhat.com/ubi9/go-toolset:1783931550 AS builder
-ARG TARGETARCH
-WORKDIR /build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOBIN=/build \
-    go install github.com/tektoncd/results/cmd/tkn-results@v0.14.0
-
-# Second stage: Extract OpenShift client (oc + kubectl) from prefetched tarball.
+# First stage: Extract OpenShift client (oc + kubectl) from prefetched tarball.
 # Konflux mounts the Hermeto prefetch output at /cachi2; the tarball is not in the
 # build context, so we must use RUN to read from the mounted path (not COPY).
 # Only the extracted binaries are copied to the final image.
@@ -40,7 +33,7 @@ RUN cp "/cachi2/output/deps/generic/openshift-client-linux-${TARGETARCH:-amd64}-
     mv /tmp/oc /tmp/kubectl /usr/local/bin/ && \
     rm /tmp/oc.tar.gz
 
-# Third stage: Create the final container image
+# Second stage: Create the final container image
 FROM registry.access.redhat.com/ubi9/ubi-minimal:1782797355
 
 LABEL \
@@ -61,9 +54,6 @@ RUN microdnf install -y --nodocs \
 # OpenShift client binaries (from prefetched tarball, extracted in oc-client stage)
 COPY --from=oc-client /usr/local/bin/oc /usr/local/bin/kubectl /usr/local/bin/
 
-# Copy the tkn-results binary from the builder stage
-COPY --from=builder --chown=root:root --chmod=755 /build/tkn-results /usr/local/bin/tkn-results
-
 COPY --chown=root:root --chmod=755 \
     scripts/fetch-tekton-records.sh \
     scripts/fetch-konflux-op-records.sh \
@@ -81,7 +71,7 @@ COPY --chown=root:root --chmod=644 scripts/jq/ /usr/local/bin/jq/
 
 COPY --chown=root:root --chmod=644 LICENSE /licenses/LICENSE
 
-ENV TEKTON_RESULTS_API_ADDR="localhost:50051"
+ENV TEKTON_RESULTS_API_ADDR="https://localhost:8443"
 ENV TEKTON_NAMESPACE=""
 ENV TEKTON_LIMIT="100"
 

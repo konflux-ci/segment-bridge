@@ -147,10 +147,12 @@ func pipelineRunNames(t *testing.T, output []byte) []string {
 }
 
 // baseEnv returns the minimal env overrides to hit a test server.
+// KUBECTL="" disables auto-detection so tests don't try to reach a real cluster.
 func baseEnv(serverURL string) map[string]string {
 	return map[string]string{
 		"TEKTON_RESULTS_TOKEN":    "test-token",
 		"TEKTON_RESULTS_API_ADDR": serverURL,
+		"KUBECTL":                 "",
 	}
 }
 

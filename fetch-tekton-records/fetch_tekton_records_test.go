@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
@@ -48,6 +49,59 @@ func startMockResultsAPIWithCapture(t *testing.T, fixtureFile string) (*httptest
 	return server, &captured
 }
 
+// paginatedHandler routes requests to different fixture files based on the
+// page_token query parameter.  The empty string key maps to the first-page
+// fixture (no page_token).
+type paginatedHandler struct {
+	mu       sync.Mutex
+	pages    map[string]string // page_token → absolute fixture path
+	requests []*http.Request
+}
+
+func (h *paginatedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	h.requests = append(h.requests, r)
+	h.mu.Unlock()
+
+	pageToken := r.URL.Query().Get("page_token")
+	fixture, ok := h.pages[pageToken]
+	if !ok {
+		http.Error(w, "unexpected page_token: "+pageToken, http.StatusBadRequest)
+		return
+	}
+	data, err := os.ReadFile(fixture)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func (h *paginatedHandler) getRequests() []*http.Request {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	cp := make([]*http.Request, len(h.requests))
+	copy(cp, h.requests)
+	return cp
+}
+
+// startPaginatedMockAPI starts an HTTP server that serves different fixtures
+// per page_token value.  Use "" as the key for the first page (no token).
+func startPaginatedMockAPI(t *testing.T, pages map[string]string) (*httptest.Server, *paginatedHandler) {
+	t.Helper()
+	absPages := make(map[string]string, len(pages))
+	for token, file := range pages {
+		abs, err := filepath.Abs(file)
+		require.NoError(t, err)
+		absPages[token] = abs
+	}
+	handler := &paginatedHandler{pages: absPages}
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	return server, handler
+}
+
 // runFetchTekton runs fetch-tekton-records.sh with the given env overrides.
 func runFetchTekton(t *testing.T, extraEnv map[string]string) ([]byte, error) {
 	t.Helper()
@@ -78,15 +132,32 @@ func nonEmptyLines(output []byte) []string {
 	return result
 }
 
-// TestFetchTektonRecords verifies the happy path: 2 PipelineRun lines are
-// emitted and the interleaved TaskRun record is absent from the output.
+// pipelineRunNames extracts metadata.name from NDJSON PipelineRun lines.
+func pipelineRunNames(t *testing.T, output []byte) []string {
+	t.Helper()
+	var names []string
+	for _, line := range nonEmptyLines(output) {
+		var obj map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(line), &obj))
+		meta, _ := obj["metadata"].(map[string]interface{})
+		name, _ := meta["name"].(string)
+		names = append(names, name)
+	}
+	return names
+}
+
+// baseEnv returns the minimal env overrides to hit a test server.
+func baseEnv(serverURL string) map[string]string {
+	return map[string]string{
+		"TEKTON_RESULTS_TOKEN":    "test-token",
+		"TEKTON_RESULTS_API_ADDR": serverURL,
+	}
+}
+
 func TestFetchTektonRecords(t *testing.T) {
 	server, captured := startMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
 
-	out, err := runFetchTekton(t, map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "test-token",
-		"TEKTON_RESULTS_API_ADDR": server.URL,
-	})
+	out, err := runFetchTekton(t, baseEnv(server.URL))
 	require.NoError(t, err)
 
 	lines := nonEmptyLines(out)
@@ -104,15 +175,10 @@ func TestFetchTektonRecords(t *testing.T) {
 	assert.Equal(t, "Bearer test-token", (*captured).Header.Get("Authorization"))
 }
 
-// TestFetchTektonRecordsOrderBy verifies that the HTTP request includes
-// the order_by=create_time desc query parameter.
 func TestFetchTektonRecordsOrderBy(t *testing.T) {
 	server, captured := startMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
 
-	_, err := runFetchTekton(t, map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "test-token",
-		"TEKTON_RESULTS_API_ADDR": server.URL,
-	})
+	_, err := runFetchTekton(t, baseEnv(server.URL))
 	require.NoError(t, err)
 
 	require.NotNil(t, *captured)
@@ -121,16 +187,12 @@ func TestFetchTektonRecordsOrderBy(t *testing.T) {
 		"order_by must be create_time desc")
 }
 
-// TestFetchTektonRecordsPageSize verifies that the page_size query parameter
-// matches TEKTON_LIMIT.
 func TestFetchTektonRecordsPageSize(t *testing.T) {
 	server, captured := startMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
 
-	_, err := runFetchTekton(t, map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "test-token",
-		"TEKTON_RESULTS_API_ADDR": server.URL,
-		"TEKTON_LIMIT":            "42",
-	})
+	env := baseEnv(server.URL)
+	env["TEKTON_LIMIT"] = "42"
+	_, err := runFetchTekton(t, env)
 	require.NoError(t, err)
 
 	require.NotNil(t, *captured)
@@ -139,15 +201,12 @@ func TestFetchTektonRecordsPageSize(t *testing.T) {
 		"page_size must match TEKTON_LIMIT")
 }
 
-// TestFetchTektonRecordsAPIPath verifies the Tekton Results REST API path.
 func TestFetchTektonRecordsAPIPath(t *testing.T) {
 	server, captured := startMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
 
-	_, err := runFetchTekton(t, map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "test-token",
-		"TEKTON_RESULTS_API_ADDR": server.URL,
-		"TEKTON_NAMESPACE":        "my-ns",
-	})
+	env := baseEnv(server.URL)
+	env["TEKTON_NAMESPACE"] = "my-ns"
+	_, err := runFetchTekton(t, env)
 	require.NoError(t, err)
 
 	require.NotNil(t, *captured)
@@ -155,15 +214,10 @@ func TestFetchTektonRecordsAPIPath(t *testing.T) {
 		"/apis/results.tekton.dev/v1alpha2/parents/my-ns/results/-/records")
 }
 
-// TestFetchTektonRecordsWildcardNamespace verifies that the default namespace
-// wildcard "-" is used in the API path.
 func TestFetchTektonRecordsWildcardNamespace(t *testing.T) {
 	server, captured := startMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
 
-	_, err := runFetchTekton(t, map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "test-token",
-		"TEKTON_RESULTS_API_ADDR": server.URL,
-	})
+	_, err := runFetchTekton(t, baseEnv(server.URL))
 	require.NoError(t, err)
 
 	require.NotNil(t, *captured)
@@ -171,15 +225,10 @@ func TestFetchTektonRecordsWildcardNamespace(t *testing.T) {
 		"/apis/results.tekton.dev/v1alpha2/parents/-/results/-/records")
 }
 
-// TestFetchTektonRecordsEmpty verifies that an empty records list produces no
-// output lines.
 func TestFetchTektonRecordsEmpty(t *testing.T) {
 	server, _ := startMockResultsAPIWithCapture(t, "testdata/records-empty.json")
 
-	out, err := runFetchTekton(t, map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "test-token",
-		"TEKTON_RESULTS_API_ADDR": server.URL,
-	})
+	out, err := runFetchTekton(t, baseEnv(server.URL))
 	require.NoError(t, err)
 
 	assert.Empty(t, strings.TrimSpace(string(out)), "empty record list should produce no output")
@@ -191,11 +240,10 @@ func TestFetchTektonRecordsSATokenFallback(t *testing.T) {
 	tokenFile := filepath.Join(t.TempDir(), "token")
 	require.NoError(t, os.WriteFile(tokenFile, []byte("sa-test-token"), 0o600))
 
-	out, err := runFetchTekton(t, map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "",
-		"SA_TOKEN_PATH":           tokenFile,
-		"TEKTON_RESULTS_API_ADDR": server.URL,
-	})
+	env := baseEnv(server.URL)
+	env["TEKTON_RESULTS_TOKEN"] = ""
+	env["SA_TOKEN_PATH"] = tokenFile
+	out, err := runFetchTekton(t, env)
 	require.NoError(t, err)
 
 	lines := nonEmptyLines(out)
@@ -249,4 +297,162 @@ func TestFetchTektonRecordsSchemePrepend(t *testing.T) {
 
 	require.NotNil(t, captured, "expected the script to prepend https:// and reach the mock server")
 	assert.Contains(t, captured.URL.Path, "/apis/results.tekton.dev/")
+}
+
+func TestFetchTektonRecordsPagination(t *testing.T) {
+	server, handler := startPaginatedMockAPI(t, map[string]string{
+		"":           "testdata/records-page1.json",
+		"page2token": "testdata/records-page2.json",
+	})
+
+	out, err := runFetchTekton(t, baseEnv(server.URL))
+	require.NoError(t, err)
+
+	names := pipelineRunNames(t, out)
+	assert.Equal(t, []string{"pr-1", "pr-2"}, names,
+		"pagination must return PipelineRuns from both pages")
+
+	reqs := handler.getRequests()
+	require.Len(t, reqs, 2, "expected 2 HTTP requests (2 pages)")
+	assert.Empty(t, reqs[0].URL.Query().Get("page_token"),
+		"first request must not have page_token")
+	assert.Equal(t, "page2token", reqs[1].URL.Query().Get("page_token"),
+		"second request must carry page_token from first response")
+}
+
+func TestFetchTektonRecordsPaginationPreservesQueryParams(t *testing.T) {
+	server, handler := startPaginatedMockAPI(t, map[string]string{
+		"":           "testdata/records-page1.json",
+		"page2token": "testdata/records-page2.json",
+	})
+
+	env := baseEnv(server.URL)
+	env["TEKTON_LIMIT"] = "50"
+	_, err := runFetchTekton(t, env)
+	require.NoError(t, err)
+
+	reqs := handler.getRequests()
+	require.Len(t, reqs, 2)
+	for i, r := range reqs {
+		q := r.URL.Query()
+		assert.Equal(t, "50", q.Get("page_size"),
+			"request %d: page_size must persist across pages", i)
+		assert.Equal(t, "create_time desc", q.Get("order_by"),
+			"request %d: order_by must persist across pages", i)
+	}
+}
+
+// TestFetchTektonRecordsPaginationURLUnsafeToken verifies that a
+// nextPageToken containing URL-unsafe characters (+, /, =, as commonly
+// produced by base64-encoded opaque tokens) survives the round trip: the
+// script must URL-encode the token before appending it to the request URL,
+// so the server-side decoded value matches the original token exactly.
+func TestFetchTektonRecordsPaginationURLUnsafeToken(t *testing.T) {
+	server, handler := startPaginatedMockAPI(t, map[string]string{
+		"":             "testdata/records-page1-b64token.json",
+		"abc+def/ghi=": "testdata/records-page2.json",
+	})
+
+	out, err := runFetchTekton(t, baseEnv(server.URL))
+	require.NoError(t, err)
+
+	names := pipelineRunNames(t, out)
+	assert.Equal(t, []string{"pr-1", "pr-2"}, names,
+		"pagination must follow a URL-unsafe token across both pages")
+
+	reqs := handler.getRequests()
+	require.Len(t, reqs, 2, "expected 2 HTTP requests (2 pages)")
+	assert.Equal(t, "abc+def/ghi=", reqs[1].URL.Query().Get("page_token"),
+		"decoded page_token on the wire must match the original unencoded token")
+}
+
+func TestFetchTektonRecordsPaginationWarnLog(t *testing.T) {
+	server, _ := startPaginatedMockAPI(t, map[string]string{
+		"":           "testdata/records-page1.json",
+		"page2token": "testdata/records-page2.json",
+	})
+
+	_, stderr, err := runFetchTektonWithStderr(t, baseEnv(server.URL))
+	require.NoError(t, err)
+
+	assert.Contains(t, string(stderr), "WARN segment-bridge: paging to catch up",
+		"multi-page fetch must emit WARN on stderr")
+	assert.Contains(t, string(stderr), "2 pages",
+		"WARN must report page count")
+}
+
+func TestFetchTektonRecordsSinglePageNoWarnLog(t *testing.T) {
+	server, _ := startMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
+
+	_, stderr, err := runFetchTektonWithStderr(t, baseEnv(server.URL))
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(stderr), "WARN",
+		"single-page fetch must not emit WARN")
+}
+
+// TestFetchTektonRecordsMaxPagesGuard verifies that the script stops
+// fetching after TEKTON_MAX_PAGES pages even when the API keeps returning
+// a nextPageToken. The fixture records-page1.json always carries a
+// nextPageToken, creating an infinite pagination loop that only the guard
+// can break.
+func TestFetchTektonRecordsMaxPagesGuard(t *testing.T) {
+	absFixture, err := filepath.Abs("testdata/records-page1.json")
+	require.NoError(t, err)
+
+	var requestCount int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requestCount, 1)
+		data, err := os.ReadFile(absFixture)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	}))
+	t.Cleanup(server.Close)
+
+	env := baseEnv(server.URL)
+	env["TEKTON_MAX_PAGES"] = "2"
+	_, stderr, err := runFetchTektonWithStderr(t, env)
+	require.NoError(t, err)
+
+	assert.Equal(t, int32(2), atomic.LoadInt32(&requestCount),
+		"script must stop after TEKTON_MAX_PAGES requests")
+	assert.Contains(t, string(stderr), "WARN fetch-tekton-records.sh: reached max page limit",
+		"max pages guard must emit WARN on stderr")
+	assert.Contains(t, string(stderr), "(2)",
+		"WARN must include the limit value")
+}
+
+// TestFetchTektonRecordsHTTPError verifies that an HTTP error response
+// (e.g. 500) causes the script to exit non-zero with a clear ERROR
+// diagnostic on stderr, thanks to curl --fail.
+func TestFetchTektonRecordsHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+
+	_, stderr, err := runFetchTektonWithStderr(t, baseEnv(server.URL))
+	require.Error(t, err, "HTTP 500 must cause script to exit non-zero")
+	assert.Contains(t, string(stderr),
+		"ERROR fetch-tekton-records.sh: Tekton Results API request failed",
+		"HTTP error must produce ERROR diagnostic on stderr")
+}
+
+// TestFetchTektonRecordsHTTPForbidden verifies that HTTP 403 also triggers
+// curl --fail and the script's error handling.
+func TestFetchTektonRecordsHTTPForbidden(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+	}))
+	t.Cleanup(server.Close)
+
+	_, stderr, err := runFetchTektonWithStderr(t, baseEnv(server.URL))
+	require.Error(t, err, "HTTP 403 must cause script to exit non-zero")
+	assert.Contains(t, string(stderr),
+		"ERROR fetch-tekton-records.sh: Tekton Results API request failed",
+		"HTTP 403 must produce ERROR diagnostic on stderr")
 }

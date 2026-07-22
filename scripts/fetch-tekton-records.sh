@@ -7,9 +7,10 @@
 #   Records are fetched in descending create_time order so that
 #   TEKTON_LIMIT returns the N most recent records, not an arbitrary page.
 #
-#   Pagination follows next_page_token to catch up when more records exist
-#   than fit in a single page. TEKTON_MAX_PAGES guards against runaway
-#   pagination when the API keeps returning nextPageToken indefinitely.
+#   When TEKTON_CURSOR is set, only records newer than the cursor are
+#   emitted, and pagination stops once a page contains a record at or
+#   before the cursor. Pagination follows next_page_token to catch up when
+#   more records exist than fit in a single page.
 #
 #   This script is part of the Tekton Results bridge pipeline:
 #   fetch-tekton-records.sh | tekton-to-segment.sh | segment-mass-uploader.sh
@@ -45,6 +46,11 @@ TEKTON_MAX_PAGES="${TEKTON_MAX_PAGES:-100}"
 #
 # Path to K8s service account token (used if TEKTON_RESULTS_TOKEN is not set)
 SA_TOKEN_PATH="${SA_TOKEN_PATH:-/var/run/secrets/kubernetes.io/serviceaccount/token}"
+#
+# Cursor create_time timestamp (e.g. "2024-01-01T12:00:00Z"). When set,
+# records with createTime <= cursor are skipped and pagination stops once a
+# page contains such a record.
+TEKTON_CURSOR="${TEKTON_CURSOR:-}"
 #
 # === End of parameters ===
 
@@ -83,6 +89,7 @@ fi
 
 RECORDS_URL="${API_BASE}/apis/results.tekton.dev/v1alpha2/parents/${TEKTON_NAMESPACE}/results/-/records"
 
+CURSOR="$TEKTON_CURSOR"
 PAGE_TOKEN=""
 PAGE_COUNT=0
 HIT_MAX_PAGES=false
@@ -109,8 +116,18 @@ while true; do
     exit 1
   fi
 
+  # Output PipelineRuns, filtering by cursor when set.
   echo "$RESPONSE" \
-    | jq -c -f "$SELFDIR/jq/filter-pipelineruns.jq"
+    | jq -c --arg cursor "${CURSOR}" -f "$SELFDIR/jq/filter-pipelineruns.jq"
+
+  # When cursor is set, stop once we reach already-processed records.
+  if [[ -n "$CURSOR" ]]; then
+    HIT_CURSOR=$(echo "$RESPONSE" | jq --arg cursor "$CURSOR" \
+      'any(.records[]?; .createTime != null and .createTime <= $cursor)')
+    if [[ "$HIT_CURSOR" == "true" ]]; then
+      break
+    fi
+  fi
 
   # Follow pagination via next_page_token.
   PAGE_TOKEN=$(echo "$RESPONSE" | jq -r '.nextPageToken // empty')

@@ -159,6 +159,7 @@ Signed-off-by: Your Name <your-email@example.com>
 | `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` |
 | `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` |
 | `TEKTON_MAX_PAGES` | `100` | `fetch-tekton-records.sh` |
+| `TEKTON_CURSOR` | *(none)* | `fetch-tekton-records.sh` |
 | `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` |
 | `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests |
 | `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` | auto (`podman`→`docker`) | Go tests |

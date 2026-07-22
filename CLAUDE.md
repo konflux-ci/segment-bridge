@@ -70,6 +70,7 @@ yamllint path/to/file.yaml
 | `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` |
 | `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` — max records per page |
 | `TEKTON_MAX_PAGES` | `100` | `fetch-tekton-records.sh` — max pages before stopping |
+| `TEKTON_CURSOR` | *(none)* | `fetch-tekton-records.sh` — override cursor timestamp |
 | `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` — curl retry count |
 | `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests — run scripts inside image |
 | `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` | auto (`podman`→`docker`) | Go tests |

@@ -58,7 +58,7 @@ yamllint path/to/file.yaml
 
 | Variable | Default | Used by |
 |---|---|---|
-| `TEKTON_RESULTS_API_ADDR` | `localhost:50051` | `fetch-tekton-records.sh` |
+| `TEKTON_RESULTS_API_ADDR` | `https://localhost:8443` | `fetch-tekton-records.sh` |
 | `TEKTON_NAMESPACE` | `-` (all) | `fetch-tekton-records.sh` |
 | `TEKTON_RESULTS_TOKEN` | SA token file | `fetch-tekton-records.sh` |
 | `SEGMENT_BATCH_API` | `https://api.segment.io/v1/batch` | `segment-uploader.sh` |

@@ -88,12 +88,16 @@ podman build -v "$(pwd)/deps:/cachi2/output/deps:Z" -t segment-bridge .
 
 # Run (adjust env vars for your cluster)
 podman run --rm \
-  -e TEKTON_RESULTS_API_ADDR=tekton-results-api-service:8080 \
+  -e TEKTON_RESULTS_API_ADDR=https://tekton-results-api-service:8443 \
   -e TEKTON_NAMESPACE=default \
   -e TEKTON_RESULTS_TOKEN="$(kubectl create token default -n default)" \
   -e SEGMENT_WRITE_KEY=your-write-key \
   segment-bridge
 ```
+
+Fetch uses the Tekton Results HTTP REST API (not the `tkn-results` gRPC
+CLI). If you previously set `TEKTON_RESULTS_API_ADDR` to a gRPC endpoint
+(`*:50051`), update it to the HTTPS REST endpoint (typically `:8443`).
 
 See the [`Dockerfile`](Dockerfile) header for additional usage examples and
 [CLAUDE.md](CLAUDE.md) for the full environment variable reference.

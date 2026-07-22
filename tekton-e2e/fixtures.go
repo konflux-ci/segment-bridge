@@ -52,7 +52,7 @@ type TektonResultsRecord struct {
 	} `json:"data"`
 }
 
-// TektonResultsResponse represents the response from tkn-results list
+// TektonResultsResponse represents the response from the Tekton Results REST API
 type TektonResultsResponse struct {
 	Records []TektonResultsRecord `json:"records"`
 }

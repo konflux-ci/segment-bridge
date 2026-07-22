@@ -21,11 +21,11 @@ import (
 
 // testEnv holds the test environment setup
 type testEnv struct {
-	t              *testing.T
-	tempDir        string
-	mockTknResults string
-	responseFile   string
-	netrcFile      string
+	t             *testing.T
+	tempDir       string
+	resultsAPIURL string
+	responseFile  string
+	netrcFile     string
 }
 
 // mockOCConfig customises the mock oc/kubectl binary written by configureMockOC.
@@ -135,27 +135,32 @@ esac
 	require.NoError(e.t, os.WriteFile(filepath.Join(e.tempDir, "kubectl"), []byte(ocScript), 0755))
 }
 
-// setupTestEnv creates a test environment with the mock tkn-results binary.
-// Call configureMockOC before running the pipeline to set up the oc/kubectl mock.
+// setupTestEnv creates a test environment with an HTTP mock for the Tekton
+// Results REST API. Call configureMockOC before running the pipeline to set up
+// the oc/kubectl mock.
 func setupTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
 	tempDir := t.TempDir()
-
-	mockTknResults := filepath.Join(tempDir, "tkn-results")
-	cmd := exec.Command("go", "build", "-o", mockTknResults, "./mock-tkn-results")
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "Failed to build mock tkn-results: %s", output)
-
 	responseFile := filepath.Join(tempDir, "response.json")
-	netrcFile := filepath.Join(tempDir, "netrc")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, err := os.ReadFile(responseFile)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	}))
+	t.Cleanup(server.Close)
 
 	return &testEnv{
-		t:              t,
-		tempDir:        tempDir,
-		mockTknResults: mockTknResults,
-		responseFile:   responseFile,
-		netrcFile:      netrcFile,
+		t:             t,
+		tempDir:       tempDir,
+		resultsAPIURL: server.URL,
+		responseFile:  responseFile,
+		netrcFile:     filepath.Join(tempDir, "netrc"),
 	}
 }
 
@@ -183,12 +188,14 @@ func (e *testEnv) buildPipelineCommand(envVars map[string]string) (*exec.Cmd, er
 
 	oldPath := os.Getenv("PATH")
 	cmd.Env = append(cmd.Env, "PATH="+e.tempDir+":"+oldPath)
-	cmd.Env = append(cmd.Env, "MOCK_TKN_RESULTS_RESPONSE_FILE="+e.responseFile)
 	cmd.Env = append(cmd.Env, "KUBECTL=oc")
 
 	for k, v := range envVars {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
+
+	// Always point at the mock HTTP server (appended last so it wins).
+	cmd.Env = append(cmd.Env, "TEKTON_RESULTS_API_ADDR="+e.resultsAPIURL)
 
 	return cmd, nil
 }
@@ -290,11 +297,10 @@ func TestHappyPath(t *testing.T) {
 	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
-		"TEKTON_NAMESPACE":        "test-namespace",
-		"TEKTON_RESULTS_TOKEN":    "fake-token",
-		"CLUSTER_ID":              "test-cluster-123",
-		"SEGMENT_WRITE_KEY":       "fake-write-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"TEKTON_NAMESPACE":     "test-namespace",
+		"TEKTON_RESULTS_TOKEN": "fake-token",
+		"CLUSTER_ID":           "test-cluster-123",
+		"SEGMENT_WRITE_KEY":    "fake-write-key",
 	})
 	require.NoError(t, err)
 	require.Greater(t, len(requests), 0, "Expected at least one Segment API request")
@@ -356,11 +362,10 @@ func TestEmptyPipeline(t *testing.T) {
 	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
-		"TEKTON_NAMESPACE":        "test-namespace",
-		"TEKTON_RESULTS_TOKEN":    "fake-token",
-		"CLUSTER_ID":              "test-cluster-123",
-		"SEGMENT_WRITE_KEY":       "fake-write-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"TEKTON_NAMESPACE":     "test-namespace",
+		"TEKTON_RESULTS_TOKEN": "fake-token",
+		"CLUSTER_ID":           "test-cluster-123",
+		"SEGMENT_WRITE_KEY":    "fake-write-key",
 	})
 	require.NoError(t, err)
 
@@ -389,10 +394,9 @@ func TestDefaultTektonNamespace(t *testing.T) {
 	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "fake-token",
-		"CLUSTER_ID":              "test-cluster-123",
-		"SEGMENT_WRITE_KEY":       "fake-write-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"TEKTON_RESULTS_TOKEN": "fake-token",
+		"CLUSTER_ID":           "test-cluster-123",
+		"SEGMENT_WRITE_KEY":    "fake-write-key",
 	})
 	require.NoError(t, err)
 	require.Greater(t, len(requests), 0, "Expected at least one Segment API request")
@@ -417,10 +421,9 @@ func TestMissingAuthToken(t *testing.T) {
 	requests, err := env.runPipeline(map[string]string{
 		"TEKTON_NAMESPACE": "test-namespace",
 		// TEKTON_RESULTS_TOKEN intentionally not set
-		"SA_TOKEN_PATH":           "/nonexistent/path/token",
-		"CLUSTER_ID":              "test-cluster-123",
-		"SEGMENT_WRITE_KEY":       "fake-write-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"SA_TOKEN_PATH":     "/nonexistent/path/token",
+		"CLUSTER_ID":        "test-cluster-123",
+		"SEGMENT_WRITE_KEY": "fake-write-key",
 	})
 	// The pipeline continues because fetch-tekton-records.sh runs under set +e;
 	// other fetchers (operator, namespace, component) still run and succeed.
@@ -458,11 +461,10 @@ func TestTaskRunFiltering(t *testing.T) {
 	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
-		"TEKTON_NAMESPACE":        "test-namespace",
-		"TEKTON_RESULTS_TOKEN":    "fake-token",
-		"CLUSTER_ID":              "test-cluster-123",
-		"SEGMENT_WRITE_KEY":       "fake-write-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"TEKTON_NAMESPACE":     "test-namespace",
+		"TEKTON_RESULTS_TOKEN": "fake-token",
+		"CLUSTER_ID":           "test-cluster-123",
+		"SEGMENT_WRITE_KEY":    "fake-write-key",
 	})
 	require.NoError(t, err)
 
@@ -505,7 +507,6 @@ func TestBatchSplitting(t *testing.T) {
 		"TEKTON_RESULTS_TOKEN":    "fake-token",
 		"CLUSTER_ID":              "test-cluster-123",
 		"SEGMENT_WRITE_KEY":       "fake-write-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
 		"SEGMENT_BATCH_DATA_SIZE": strconv.Itoa(testBatchSizeLimit),
 	})
 	require.NoError(t, err)
@@ -548,11 +549,10 @@ func TestNamespaceAnonymization(t *testing.T) {
 	env.configureMockOC(mockOCConfig{})
 
 	requests, err := env.runPipeline(map[string]string{
-		"TEKTON_NAMESPACE":        "test-namespace",
-		"TEKTON_RESULTS_TOKEN":    "fake-token",
-		"CLUSTER_ID":              "test-cluster-456",
-		"SEGMENT_WRITE_KEY":       "fake-write-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"TEKTON_NAMESPACE":     "test-namespace",
+		"TEKTON_RESULTS_TOKEN": "fake-token",
+		"CLUSTER_ID":           "test-cluster-456",
+		"SEGMENT_WRITE_KEY":    "fake-write-key",
 	})
 	require.NoError(t, err)
 
@@ -672,10 +672,9 @@ func TestTektonPipelineE2EDatasourceKPIs(t *testing.T) {
 		env.setMockResponse(response)
 
 		requests, err := env.runPipeline(map[string]string{
-			"TEKTON_RESULTS_TOKEN":    "fake-token",
-			"CLUSTER_ID":              clusterID,
-			"SEGMENT_WRITE_KEY":       "fake-key",
-			"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+			"TEKTON_RESULTS_TOKEN": "fake-token",
+			"CLUSTER_ID":           clusterID,
+			"SEGMENT_WRITE_KEY":    "fake-key",
 		})
 		require.NoError(t, err)
 
@@ -699,11 +698,10 @@ func TestTektonPipelineE2EDatasourceKPIs(t *testing.T) {
 		env.setMockResponse(response)
 
 		requests, err := env.runPipeline(map[string]string{
-			"TEKTON_RESULTS_TOKEN":    "fake-token",
-			"CLUSTER_ID":              clusterID,
-			"SEGMENT_WRITE_KEY":       "fake-key",
-			"TEKTON_RESULTS_API_ADDR": "localhost:50051",
-			"NAMESPACE_NOW_ISO":       kpiNow,
+			"TEKTON_RESULTS_TOKEN": "fake-token",
+			"CLUSTER_ID":           clusterID,
+			"SEGMENT_WRITE_KEY":    "fake-key",
+			"NAMESPACE_NOW_ISO":    kpiNow,
 		})
 		require.NoError(t, err)
 
@@ -727,11 +725,10 @@ func TestTektonPipelineE2EDatasourceKPIs(t *testing.T) {
 		env.setMockResponse(response)
 
 		requests, err := env.runPipeline(map[string]string{
-			"TEKTON_RESULTS_TOKEN":    "fake-token",
-			"CLUSTER_ID":              clusterID,
-			"SEGMENT_WRITE_KEY":       "fake-key",
-			"TEKTON_RESULTS_API_ADDR": "localhost:50051",
-			"COMPONENT_NOW_ISO":       kpiNow,
+			"TEKTON_RESULTS_TOKEN": "fake-token",
+			"CLUSTER_ID":           clusterID,
+			"SEGMENT_WRITE_KEY":    "fake-key",
+			"COMPONENT_NOW_ISO":    kpiNow,
 		})
 		require.NoError(t, err)
 
@@ -757,9 +754,8 @@ func TestTektonPipelineE2ENoUploadMode(t *testing.T) {
 	// SEGMENT_WRITE_KEY intentionally absent; SEGMENT_BATCH_API is provided by
 	// runPipelineWithOutput but the script will exit before calling it.
 	_, output, err := env.runPipelineWithOutput(map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "fake-token",
-		"CLUSTER_ID":              "cluster-no-upload",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"TEKTON_RESULTS_TOKEN": "fake-token",
+		"CLUSTER_ID":           "cluster-no-upload",
 	})
 	require.NoError(t, err, "no-upload mode should succeed:\n%s", output)
 	assert.Contains(t, output, "No SEGMENT_WRITE_KEY configured")
@@ -780,9 +776,8 @@ func TestTektonPipelineE2EClusterIdentityFallback(t *testing.T) {
 
 	// CLUSTER_ID intentionally absent; kube-system UID is also empty.
 	requests, output, err := env.runPipelineWithOutput(map[string]string{
-		"TEKTON_RESULTS_TOKEN":    "fake-token",
-		"SEGMENT_WRITE_KEY":       "fake-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"TEKTON_RESULTS_TOKEN": "fake-token",
+		"SEGMENT_WRITE_KEY":    "fake-key",
 	})
 	require.NoError(t, err, "pipeline should succeed when CLUSTER_ID cannot be resolved:\n%s", output)
 	assert.Contains(t, output, "could not read kube-system UID")
@@ -792,9 +787,9 @@ func TestTektonPipelineE2EClusterIdentityFallback(t *testing.T) {
 	testfixture.AssertSegmentHeartbeat(t, events, "anonymous", "test", "test")
 }
 
-// TestMalformedTknResults verifies the pipeline tolerates malformed tkn-results
-// output and still emits a heartbeat.
-func TestMalformedTknResults(t *testing.T) {
+// TestMalformedResultsAPIResponse verifies the pipeline tolerates malformed
+// Results API output and still emits a heartbeat.
+func TestMalformedResultsAPIResponse(t *testing.T) {
 	requireTools(t)
 	env := setupTestEnv(t)
 	env.createDefaultNetrc()
@@ -802,16 +797,15 @@ func TestMalformedTknResults(t *testing.T) {
 	env.setMockResponse("not-json{[[[")
 
 	requests, err := env.runPipeline(map[string]string{
-		"TEKTON_NAMESPACE":        "test-ns",
-		"TEKTON_RESULTS_TOKEN":    "fake-token",
-		"CLUSTER_ID":              "cluster-bad-tkn",
-		"SEGMENT_WRITE_KEY":       "fake-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"TEKTON_NAMESPACE":     "test-ns",
+		"TEKTON_RESULTS_TOKEN": "fake-token",
+		"CLUSTER_ID":           "cluster-bad-tkn",
+		"SEGMENT_WRITE_KEY":    "fake-key",
 	})
-	require.NoError(t, err, "Pipeline should succeed despite malformed tkn-results output")
+	require.NoError(t, err, "Pipeline should succeed despite malformed Results API output")
 
 	events := collectEvents(t, requests)
-	require.Len(t, events, 1, "Only a heartbeat should be emitted when tkn-results output is malformed")
+	require.Len(t, events, 1, "Only a heartbeat should be emitted when Results API output is malformed")
 	testfixture.AssertSegmentHeartbeat(t, events, "cluster-bad-tkn", "test", "test")
 }
 
@@ -832,11 +826,10 @@ func TestKonfluxOperatorFetchFailure(t *testing.T) {
 	env.setMockResponse(response)
 
 	requests, err := env.runPipeline(map[string]string{
-		"TEKTON_NAMESPACE":        "test-ns",
-		"TEKTON_RESULTS_TOKEN":    "fake-token",
-		"CLUSTER_ID":              "cluster-kfx-fail",
-		"SEGMENT_WRITE_KEY":       "fake-key",
-		"TEKTON_RESULTS_API_ADDR": "localhost:50051",
+		"TEKTON_NAMESPACE":     "test-ns",
+		"TEKTON_RESULTS_TOKEN": "fake-token",
+		"CLUSTER_ID":           "cluster-kfx-fail",
+		"SEGMENT_WRITE_KEY":    "fake-key",
 	})
 	require.NoError(t, err, "Pipeline should continue when fetch-konflux-op-records fails")
 
@@ -888,13 +881,12 @@ func TestTektonPipelineE2EErrors(t *testing.T) {
 			env.setMockResponse(response)
 
 			envVars := map[string]string{
-				"TEKTON_NAMESPACE":        "test-ns",
-				"TEKTON_RESULTS_TOKEN":    "fake-token",
-				"CLUSTER_ID":              "test-cluster",
-				"SEGMENT_WRITE_KEY":       "fake-key",
-				"SEGMENT_RETRIES":         "0",
-				"TEKTON_RESULTS_API_ADDR": "localhost:50051",
-				"CURL_NETRC":              env.netrcFile,
+				"TEKTON_NAMESPACE":     "test-ns",
+				"TEKTON_RESULTS_TOKEN": "fake-token",
+				"CLUSTER_ID":           "test-cluster",
+				"SEGMENT_WRITE_KEY":    "fake-key",
+				"SEGMENT_RETRIES":      "0",
+				"CURL_NETRC":           env.netrcFile,
 			}
 			for k, v := range tc.extraEnv {
 				envVars[k] = v

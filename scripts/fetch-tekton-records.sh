@@ -1,8 +1,11 @@
 #!/bin/bash
 # fetch-tekton-records.sh
-#   Fetch PipelineRun records from Tekton Results API.
+#   Fetch PipelineRun records from Tekton Results HTTP REST API.
 #   Outputs decoded PipelineRun JSON objects to STDOUT (one per line).
 #   Filters out TaskRuns - only PipelineRuns are returned.
+#
+#   Records are fetched in descending create_time order so that
+#   TEKTON_LIMIT returns the N most recent records, not an arbitrary page.
 #
 #   This script is part of the Tekton Results bridge pipeline:
 #   fetch-tekton-records.sh | tekton-to-segment.sh | segment-mass-uploader.sh
@@ -15,8 +18,10 @@ SELFDIR="$(cd "$(dirname "$0")" && pwd)"
 # The following variables can be set from outside the script by setting
 # similarly named environment variables.
 #
-# The Tekton Results API address (gRPC)
-TEKTON_RESULTS_API_ADDR="${TEKTON_RESULTS_API_ADDR:-localhost:50051}"
+# Base URL of the Tekton Results HTTP REST API.
+# Include the scheme (http:// or https://). If omitted, https:// is assumed.
+# Examples: https://tekton-results-api:8443, http://localhost:8080
+TEKTON_RESULTS_API_ADDR="${TEKTON_RESULTS_API_ADDR:-https://localhost:8443}"
 #
 # Authentication token for Tekton Results API
 # If not set, will attempt to read from K8s service account token
@@ -27,7 +32,7 @@ TEKTON_RESULTS_TOKEN="${TEKTON_RESULTS_TOKEN:-}"
 # Defaults to "-" (all namespaces) when unset.
 TEKTON_NAMESPACE="${TEKTON_NAMESPACE:--}"
 #
-# Maximum number of records to fetch
+# Maximum number of records to fetch per page
 TEKTON_LIMIT="${TEKTON_LIMIT:-100}"
 #
 # Path to K8s service account token (used if TEKTON_RESULTS_TOKEN is not set)
@@ -60,20 +65,17 @@ get_token() {
   return 1
 }
 
-# Get authentication token
 TOKEN=$(get_token) || exit 1
 
-# Build tkn-results command (flags only — positional arg added at invocation
-# with a -- separator so "-/results/-" is never parsed as a flag)
-TKN_RESULTS_CMD=(tkn-results records list --addr "$TEKTON_RESULTS_API_ADDR" --insecure -o json --limit "$TEKTON_LIMIT")
-
-if [[ -n "$TOKEN" ]]; then
-  TKN_RESULTS_CMD+=(--authtoken "$TOKEN")
+# Prepend https:// when the address has no scheme (backward compat).
+API_BASE="$TEKTON_RESULTS_API_ADDR"
+if [[ "$API_BASE" != http://* ]] && [[ "$API_BASE" != https://* ]]; then
+  API_BASE="https://${API_BASE}"
 fi
 
-# Fetch records from Tekton Results and process with jq:
-# - Filter for PipelineRun records only (data.type == "tekton.dev/v1.PipelineRun")
-# - Base64 decode the payload (data.value)
-# - Output one PipelineRun JSON per line
-"${TKN_RESULTS_CMD[@]}" -- "${TEKTON_NAMESPACE}/results/-" 2>&1 \
+RECORDS_URL="${API_BASE}/apis/results.tekton.dev/v1alpha2/parents/${TEKTON_NAMESPACE}/results/-/records"
+
+curl -fsSk \
+  -H "Authorization: Bearer $TOKEN" \
+  "${RECORDS_URL}?page_size=${TEKTON_LIMIT}&order_by=create_time%20desc" \
   | jq -c -f "$SELFDIR/jq/filter-pipelineruns.jq"

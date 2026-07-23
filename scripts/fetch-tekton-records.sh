@@ -7,6 +7,10 @@
 #   Records are fetched in descending create_time order so that
 #   TEKTON_LIMIT returns the N most recent records, not an arbitrary page.
 #
+#   Pagination follows next_page_token to catch up when more records exist
+#   than fit in a single page. TEKTON_MAX_PAGES guards against runaway
+#   pagination when the API keeps returning nextPageToken indefinitely.
+#
 #   This script is part of the Tekton Results bridge pipeline:
 #   fetch-tekton-records.sh | tekton-to-segment.sh | segment-mass-uploader.sh
 #
@@ -34,6 +38,10 @@ TEKTON_NAMESPACE="${TEKTON_NAMESPACE:--}"
 #
 # Maximum number of records to fetch per page
 TEKTON_LIMIT="${TEKTON_LIMIT:-100}"
+#
+# Maximum number of pages to fetch before stopping. Guards against runaway
+# pagination when the API keeps returning nextPageToken indefinitely.
+TEKTON_MAX_PAGES="${TEKTON_MAX_PAGES:-100}"
 #
 # Path to K8s service account token (used if TEKTON_RESULTS_TOKEN is not set)
 SA_TOKEN_PATH="${SA_TOKEN_PATH:-/var/run/secrets/kubernetes.io/serviceaccount/token}"
@@ -75,7 +83,42 @@ fi
 
 RECORDS_URL="${API_BASE}/apis/results.tekton.dev/v1alpha2/parents/${TEKTON_NAMESPACE}/results/-/records"
 
-curl -fsSk \
-  -H "Authorization: Bearer $TOKEN" \
-  "${RECORDS_URL}?page_size=${TEKTON_LIMIT}&order_by=create_time%20desc" \
-  | jq -c -f "$SELFDIR/jq/filter-pipelineruns.jq"
+PAGE_TOKEN=""
+PAGE_COUNT=0
+HIT_MAX_PAGES=false
+
+while true; do
+  if [[ "$PAGE_COUNT" -ge "$TEKTON_MAX_PAGES" ]]; then
+    echo "WARN fetch-tekton-records.sh: reached max page limit (${TEKTON_MAX_PAGES}); stopping pagination" >&2
+    HIT_MAX_PAGES=true
+    break
+  fi
+
+  PAGE_COUNT=$((PAGE_COUNT + 1))
+
+  URL="${RECORDS_URL}?page_size=${TEKTON_LIMIT}&order_by=create_time%20desc"
+  if [[ -n "$PAGE_TOKEN" ]]; then
+    # Pagination tokens are opaque and frequently base64-encoded (may
+    # contain +, /, =), which are not safe unescaped in a URL query string.
+    PAGE_TOKEN_ENC=$(jq -rn --arg t "$PAGE_TOKEN" '$t|@uri')
+    URL="${URL}&page_token=${PAGE_TOKEN_ENC}"
+  fi
+
+  if ! RESPONSE=$(curl -sSk --fail -H "Authorization: Bearer $TOKEN" "$URL"); then
+    echo "ERROR fetch-tekton-records.sh: Tekton Results API request failed on page ${PAGE_COUNT}" >&2
+    exit 1
+  fi
+
+  echo "$RESPONSE" \
+    | jq -c -f "$SELFDIR/jq/filter-pipelineruns.jq"
+
+  # Follow pagination via next_page_token.
+  PAGE_TOKEN=$(echo "$RESPONSE" | jq -r '.nextPageToken // empty')
+  if [[ -z "$PAGE_TOKEN" ]]; then
+    break
+  fi
+done
+
+if [[ "$PAGE_COUNT" -gt 1 ]] && [[ "$HIT_MAX_PAGES" != "true" ]]; then
+  echo "WARN segment-bridge: paging to catch up — processed records across $PAGE_COUNT pages (limit=$TEKTON_LIMIT)" >&2
+fi

@@ -1,0 +1,12 @@
+{
+  "records": [
+    {
+      "name": "ns-2/results/2/records/2",
+      "createTime": "2024-01-01T11:00:00Z",
+      "data": {
+        "type": "tekton.dev/v1.PipelineRun",
+        "value": "eyJhcGlWZXJzaW9uIjoidGVrdG9uLmRldi92MSIsImtpbmQiOiJQaXBlbGluZVJ1biIsIm1ldGFkYXRhIjp7Im5hbWUiOiJwci0yIiwibmFtZXNwYWNlIjoibnMtMiIsInVpZCI6InVpZC1wci0yIn0sInN0YXR1cyI6eyJzdGFydFRpbWUiOiIyMDI0LTAxLTAxVDExOjAwOjAwWiIsImNvbXBsZXRpb25UaW1lIjoiMjAyNC0wMS0wMVQxMTowNTowMFoiLCJjb25kaXRpb25zIjpbeyJ0eXBlIjoiU3VjY2VlZGVkIiwic3RhdHVzIjoiRmFsc2UiLCJyZWFzb24iOiJGYWlsZWQifV19fQ=="
+      }
+    }
+  ]
+}

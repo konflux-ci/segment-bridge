@@ -22,7 +22,7 @@ jobs:
             ${{ github.event_name == 'merge_group' &&
             github.event.merge_group.head_sha ||
             github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
           cache: 'pip'

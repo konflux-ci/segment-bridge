@@ -69,6 +69,7 @@ yamllint path/to/file.yaml
 | `NAMESPACE_RECENT_HOURS` | `4` | `fetch-namespace-records.sh` |
 | `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` |
 | `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` — max records per page |
+| `TEKTON_MAX_PAGES` | `100` | `fetch-tekton-records.sh` — max pages before stopping |
 | `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` — curl retry count |
 | `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests — run scripts inside image |
 | `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` | auto (`podman`→`docker`) | Go tests |

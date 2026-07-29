@@ -78,9 +78,41 @@ func EnvWithStubPath(stubDir string) []string {
 func MinimalHostEnvWithoutKubectl(t *testing.T) []string {
 	t.Helper()
 	t.Setenv(EnvTestImage, "")
+	stubDir := minimalHostStubDir(t, map[string]struct{}{"kubectl": {}, "oc": {}})
+
+	return []string{
+		"PATH=" + stubDir,
+		"HOME=" + stubDir,
+	}
+}
+
+// MinimalHostEnvWithOcOnly returns env for host script runs where bash must
+// be on PATH (for kcov/shebang) and an oc stub (running ocScript) is present,
+// but kubectl must not be found. It builds a temp directory with symlinks to
+// every executable in /bin and /usr/bin except kubectl and oc (the real oc is
+// excluded too, so only the stub below is found), then writes the oc stub
+// into that same directory. Used to exercise the oc-fallback branch of
+// KUBECTL auto-detection even on machines where a real kubectl/oc is
+// installed system-wide.
+func MinimalHostEnvWithOcOnly(t *testing.T, ocScript string) []string {
+	t.Helper()
+	t.Setenv(EnvTestImage, "")
+	stubDir := minimalHostStubDir(t, map[string]struct{}{"kubectl": {}, "oc": {}})
+	WriteStub(t, stubDir, "oc", ocScript)
+
+	return []string{
+		"PATH=" + stubDir,
+		"HOME=" + stubDir,
+	}
+}
+
+// minimalHostStubDir builds a temp directory containing symlinks to every
+// executable in /bin and /usr/bin except those named in excluded, so callers
+// can layer their own stubs for the excluded names on top.
+func minimalHostStubDir(t *testing.T, excluded map[string]struct{}) string {
+	t.Helper()
 	stubDir := t.TempDir()
 
-	excluded := map[string]struct{}{"kubectl": {}, "oc": {}}
 	for _, dir := range []string{"/bin", "/usr/bin"} {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -98,11 +130,7 @@ func MinimalHostEnvWithoutKubectl(t *testing.T) []string {
 			_ = os.Symlink(filepath.Join(dir, name), dst)
 		}
 	}
-
-	return []string{
-		"PATH=" + stubDir,
-		"HOME=" + stubDir,
-	}
+	return stubDir
 }
 
 // ScriptBundledInBridgeImage reports whether basename matches a script installed under /usr/local/bin in the bridge image.

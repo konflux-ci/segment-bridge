@@ -18,7 +18,7 @@ description: >-
 | `e2e_tests.yaml` | push to main, PRs, merge group | Builds test image, runs `go test -tags=e2e` in `tekton-e2e/` |
 | `gitlint.yaml` | PRs | Validates commit messages against `.gitlint` rules |
 | `tekton-sample-input.yaml` | push to main, PRs | Ensures `tekton-to-segment/sample/` fixtures are up to date |
-| `dependabot-auto-merge.yaml` | PR review events | Auto-merges minor/patch Dependabot and Konflux PRs |
+| `dependabot-auto-merge.yaml` | PRs (opened/reopened) | Auto-merges non-major Konflux PRs |
 
 ## Conventions
 

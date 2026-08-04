@@ -4,6 +4,5 @@ version: v1.25.0
 exclude:
   global:
     - db.go
-    - 'kwok/host-operator/'
     
 patch: {}

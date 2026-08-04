@@ -54,15 +54,11 @@
       "groupName": "Go dependencies"
     },
     {
-      "description": "Disable major updates for go.yaml.in/yaml/v2 — /v2 and /v3 are distinct Go modules; Renovate incorrectly offers v3.x as a major update for /v2",
-      "matchPackageNames": ["go.yaml.in/yaml/v2"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false
-    },
-    {
-      "description": "Disable major updates for gopkg.in/evanphx/json-patch.v4 — /v4 and /v5 are distinct Go modules with different import paths",
-      "matchPackageNames": ["gopkg.in/evanphx/json-patch.v4"],
-      "matchUpdateTypes": ["major"],
+      "description": "Never update these — /v2 vs /v3 (yaml) and .v4 vs .v5 (json-patch) are distinct Go modules with different import paths, not version bumps of the same module. Scoping this to matchUpdateTypes: [\"major\"] has repeatedly failed to catch Renovate/Mintmaker mis-classifying these as major updates (see #284), so the exclusion is now unconditional. Both are indirect-only deps, so they will still move naturally when their real importer upgrades and go mod tidy runs.",
+      "matchPackageNames": [
+        "go.yaml.in/yaml/v2",
+        "gopkg.in/evanphx/json-patch.v4"
+      ],
       "enabled": false
     }
   ]

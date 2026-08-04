@@ -75,6 +75,146 @@ func runMainJob(t *testing.T, scriptPath string) (stdout, stderr string, exitCod
 	return runMainJobWithEnv(t, scriptPath, env)
 }
 
+// writeFetchMarkerStubs creates fetch stubs that each output a JSON marker.
+func writeFetchMarkerStubs(t *testing.T, dir string) {
+	t.Helper()
+	testfixture.WriteStub(t, dir, "fetch-tekton-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"tekton\"}'\n")
+	testfixture.WriteStub(t, dir, "fetch-konflux-op-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"op\"}'\n")
+	testfixture.WriteStub(t, dir, "fetch-namespace-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"ns\"}'\n")
+	testfixture.WriteStub(t, dir, "fetch-component-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"comp\"}'\n")
+}
+
+// writePassthroughStubs creates downstream stubs that pass pipeline output through.
+func writePassthroughStubs(t *testing.T, dir string) {
+	t.Helper()
+	testfixture.WriteStub(t, dir, "get-konflux-public-info.sh",
+		"#!/bin/bash\nexec \"$@\"\n")
+	testfixture.WriteStub(t, dir, "tekton-to-segment.sh",
+		"#!/bin/bash\ncat\n")
+	testfixture.WriteStub(t, dir, "segment-mass-uploader.sh",
+		"#!/bin/bash\ncat\n")
+}
+
+func TestSkipSingleSource(t *testing.T) {
+	dir := t.TempDir()
+	writeFetchMarkerStubs(t, dir)
+	writePassthroughStubs(t, dir)
+
+	script := linkMainJob(t, dir)
+	env := append(os.Environ(),
+		"SEGMENT_WRITE_KEY=test-key",
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+		"SEGMENT_BRIDGE_SKIP_SOURCES=konflux-op-records",
+	)
+	stdout, stderr, exitCode := runMainJobWithEnv(t, script, env)
+
+	assert.Equal(t, 0, exitCode, "main job should exit 0; stderr:\n%s", stderr)
+	assert.Contains(t, stdout, `{"marker":"tekton"}`)
+	assert.Contains(t, stdout, `{"marker":"ns"}`)
+	assert.Contains(t, stdout, `{"marker":"comp"}`)
+	assert.NotContains(t, stdout, `{"marker":"op"}`)
+	assert.Contains(t, stderr, "skipping konflux-op-records")
+}
+
+func TestSkipMultipleSources(t *testing.T) {
+	dir := t.TempDir()
+	writeFetchMarkerStubs(t, dir)
+	writePassthroughStubs(t, dir)
+
+	script := linkMainJob(t, dir)
+	env := append(os.Environ(),
+		"SEGMENT_WRITE_KEY=test-key",
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+		"SEGMENT_BRIDGE_SKIP_SOURCES=konflux-op-records,namespace-records",
+	)
+	stdout, stderr, exitCode := runMainJobWithEnv(t, script, env)
+
+	assert.Equal(t, 0, exitCode, "main job should exit 0; stderr:\n%s", stderr)
+	assert.Contains(t, stdout, `{"marker":"tekton"}`)
+	assert.Contains(t, stdout, `{"marker":"comp"}`)
+	assert.NotContains(t, stdout, `{"marker":"op"}`)
+	assert.NotContains(t, stdout, `{"marker":"ns"}`)
+	assert.Contains(t, stderr, "skipping konflux-op-records")
+	assert.Contains(t, stderr, "skipping namespace-records")
+}
+
+func TestSkipSourcesWithWhitespace(t *testing.T) {
+	dir := t.TempDir()
+	writeFetchMarkerStubs(t, dir)
+	writePassthroughStubs(t, dir)
+
+	script := linkMainJob(t, dir)
+	env := append(os.Environ(),
+		"SEGMENT_WRITE_KEY=test-key",
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+		"SEGMENT_BRIDGE_SKIP_SOURCES=konflux-op-records, namespace-records",
+	)
+	stdout, stderr, exitCode := runMainJobWithEnv(t, script, env)
+
+	assert.Equal(t, 0, exitCode, "main job should exit 0; stderr:\n%s", stderr)
+	assert.Contains(t, stdout, `{"marker":"tekton"}`)
+	assert.Contains(t, stdout, `{"marker":"comp"}`)
+	assert.NotContains(t, stdout, `{"marker":"op"}`)
+	assert.NotContains(t, stdout, `{"marker":"ns"}`)
+	assert.Contains(t, stderr, "skipping konflux-op-records")
+	assert.Contains(t, stderr, "skipping namespace-records")
+}
+
+func TestSkipSourceNotExecuted(t *testing.T) {
+	dir := t.TempDir()
+
+	testfixture.WriteStub(t, dir, "fetch-tekton-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"tekton\"}'\n")
+	testfixture.WriteStub(t, dir, "fetch-konflux-op-records.sh",
+		"#!/bin/bash\necho 'ERROR: skipped stub must not run' >&2\nexit 1\n")
+	testfixture.WriteStub(t, dir, "fetch-namespace-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"ns\"}'\n")
+	testfixture.WriteStub(t, dir, "fetch-component-records.sh",
+		"#!/bin/bash\necho '{\"marker\":\"comp\"}'\n")
+	writePassthroughStubs(t, dir)
+
+	script := linkMainJob(t, dir)
+	env := append(os.Environ(),
+		"SEGMENT_WRITE_KEY=test-key",
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+		"SEGMENT_BRIDGE_SKIP_SOURCES=konflux-op-records",
+	)
+	stdout, stderr, exitCode := runMainJobWithEnv(t, script, env)
+
+	assert.Equal(t, 0, exitCode, "main job should exit 0; stderr:\n%s", stderr)
+	assert.Contains(t, stdout, `{"marker":"tekton"}`)
+	assert.Contains(t, stdout, `{"marker":"ns"}`)
+	assert.Contains(t, stdout, `{"marker":"comp"}`)
+	assert.NotContains(t, stdout, `{"marker":"op"}`)
+	assert.NotContains(t, stderr, "skipped stub must not run")
+	assert.Contains(t, stderr, "skipping konflux-op-records")
+}
+
+func TestSkipUnknownSourceIgnored(t *testing.T) {
+	dir := t.TempDir()
+	writeFetchMarkerStubs(t, dir)
+	writePassthroughStubs(t, dir)
+
+	script := linkMainJob(t, dir)
+	env := append(os.Environ(),
+		"SEGMENT_WRITE_KEY=test-key",
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+		"SEGMENT_BRIDGE_SKIP_SOURCES=nonexistent-source",
+	)
+	stdout, stderr, exitCode := runMainJobWithEnv(t, script, env)
+
+	assert.Equal(t, 0, exitCode, "main job should exit 0; stderr:\n%s", stderr)
+	assert.Contains(t, stdout, `{"marker":"tekton"}`)
+	assert.Contains(t, stdout, `{"marker":"op"}`)
+	assert.Contains(t, stdout, `{"marker":"ns"}`)
+	assert.Contains(t, stdout, `{"marker":"comp"}`)
+	assert.NotContains(t, stderr, "skipping nonexistent-source")
+}
+
 func TestBestEffortFetchSources(t *testing.T) {
 	dir := t.TempDir()
 

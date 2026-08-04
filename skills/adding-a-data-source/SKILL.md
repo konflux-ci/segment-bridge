@@ -73,7 +73,7 @@ If fixture YAML has long lines or non-standard formatting, append the fixture pa
 
 ### C. Tekton main job
 
-`scripts/tekton-main-job.sh` — inside the brace group that already uses `set +e`, append a call to the new script before `true; }`. Fetches are **best-effort**: failures must not stop other fetches or the pipe into `get-konflux-public-info.sh`.
+`scripts/tekton-main-job.sh` — inside the brace group that already uses `set +e`, add `run_source <logical-name> fetch-<resource>-records.sh` before `true; }` (use a logical name consistent with existing entries, e.g. `component-records`). Fetches are **best-effort**: failures must not stop other fetches or the pipe into `get-konflux-public-info.sh`.
 
 ### D. README diagram
 

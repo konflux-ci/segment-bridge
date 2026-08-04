@@ -31,6 +31,28 @@ set -o pipefail -o errexit -o nounset -o xtrace
 SELFDIR="$(dirname "$0")"
 PATH="$SELFDIR:${PATH#"$SELFDIR":}"
 
+# Parse SEGMENT_BRIDGE_SKIP_SOURCES into a lookup-friendly string.
+# Comma-separated logical names (whitespace around tokens is trimmed):
+#   tekton-records, konflux-op-records, namespace-records, component-records
+# When a name appears in the list, run_source skips that fetch script.
+_skip_sources=","
+if [[ -n "${SEGMENT_BRIDGE_SKIP_SOURCES:-}" ]]; then
+  IFS=',' read -ra _skip_arr <<< "${SEGMENT_BRIDGE_SKIP_SOURCES}"
+  for _entry in "${_skip_arr[@]}"; do
+    _entry="${_entry#"${_entry%%[![:space:]]*}"}"
+    _entry="${_entry%"${_entry##*[![:space:]]}"}"
+    [[ -n "$_entry" ]] && _skip_sources="${_skip_sources}${_entry},"
+  done
+fi
+run_source() {
+  local name="$1"; shift
+  if [[ "$_skip_sources" == *",$name,"* ]]; then
+    echo "skipping $name (SEGMENT_BRIDGE_SKIP_SOURCES)" >&2
+    return 0
+  fi
+  "$@"
+}
+
 # Generate a temporary .netrc file from SEGMENT_WRITE_KEY if provided.
 # The segment-uploader.sh script uses CURL_NETRC for authentication, so we
 # convert the write key into .netrc format here.
@@ -52,6 +74,12 @@ fi
 # Fetch sources are best-effort: a failing data source must not prevent the
 # remaining sources from running or abort the pipeline.  The brace group runs
 # in a subshell (left side of a pipe) so `set +e` is scoped automatically.
-{ set +e; fetch-tekton-records.sh; fetch-konflux-op-records.sh; fetch-namespace-records.sh; fetch-component-records.sh; true; } \
+{ set +e
+  run_source tekton-records fetch-tekton-records.sh
+  run_source konflux-op-records fetch-konflux-op-records.sh
+  run_source namespace-records fetch-namespace-records.sh
+  run_source component-records fetch-component-records.sh
+  true
+} \
   | get-konflux-public-info.sh tekton-to-segment.sh \
   | segment_sink

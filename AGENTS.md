@@ -152,6 +152,7 @@ Signed-off-by: Your Name <your-email@example.com>
 | `TEKTON_RESULTS_TOKEN` | SA token file | `fetch-tekton-records.sh` |
 | `SEGMENT_BATCH_API` | `https://api.segment.io/v1/batch` | `segment-uploader.sh` |
 | `SEGMENT_WRITE_KEY` | *(none)* | `tekton-main-job.sh` |
+| `SEGMENT_BRIDGE_SKIP_SOURCES` | *(none)* | `tekton-main-job.sh` — comma-separated: tekton-records, konflux-op-records, namespace-records, component-records |
 | `CURL_NETRC` | `$HOME/.netrc` | `segment-uploader.sh` |
 | `CLUSTER_ID` | `anonymous` | `tekton-to-segment.sh` |
 | `KUBECTL` | auto-detect | All `fetch-*.sh` / `get-konflux-public-info.sh` |

@@ -3,6 +3,9 @@ extends: default
 rules:
   braces:
     max-spaces-inside: -1
+  # Full 40-char action SHAs (org policy) routinely exceed 80 cols.
+  line-length:
+    max: 120
 ignore:
   - .tekton/
   - .github/workflows/fullsend.yaml

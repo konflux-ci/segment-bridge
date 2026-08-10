@@ -22,8 +22,10 @@ description: >-
 
 ## Conventions
 
-- **Action versions:** pin to major tags — `actions/checkout@v6`,
-  `actions/setup-go@v6`, `actions/setup-python@v6`.
+- **Action versions:** pin to full 40-character commit SHAs (org policy),
+  with a `# vN` comment for readability — e.g.
+  `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7`.
+  Do not use tags or branch names in `uses:`.
 - **Go version:** always use `go-version-file: 'go.mod'` (never hardcode).
 - **Caching:** Go module cache via `actions/setup-go` `cache: true`.
   Python deps via `actions/setup-python` `cache: pip`.

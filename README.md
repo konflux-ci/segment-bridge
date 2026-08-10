@@ -99,8 +99,39 @@ Fetch uses the Tekton Results HTTP REST API (not the `tkn-results` gRPC
 CLI). If you previously set `TEKTON_RESULTS_API_ADDR` to a gRPC endpoint
 (`*:50051`), update it to the HTTPS REST endpoint (typically `:8443`).
 
-See the [`Dockerfile`](Dockerfile) header for additional usage examples and
-[CLAUDE.md](CLAUDE.md) for the full environment variable reference.
+See the [`Dockerfile`](Dockerfile) header for additional usage examples.
+
+## Environment variables
+
+| Variable | Default | Used by | Description |
+|----------|---------|---------|-------------|
+| `TEKTON_RESULTS_API_ADDR` | `https://localhost:8443` | `fetch-tekton-records.sh` | Tekton Results HTTP REST API base URL (include `http://` or `https://`) |
+| `TEKTON_RESULTS_TOKEN` | *(empty)* | `fetch-tekton-records.sh` | Bearer token for the Results API; when unset, read from `SA_TOKEN_PATH` |
+| `SA_TOKEN_PATH` | `/var/run/secrets/kubernetes.io/serviceaccount/token` | `fetch-tekton-records.sh` | Service account token file used when `TEKTON_RESULTS_TOKEN` is unset |
+| `TEKTON_NAMESPACE` | `-` (all namespaces) | `fetch-tekton-records.sh` | Namespace passed to the Results API parent path |
+| `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` | Maximum PipelineRun records fetched per API page |
+| `TEKTON_MAX_PAGES` | `100` | `fetch-tekton-records.sh` | Maximum pages before pagination stops |
+| `TEKTON_CURSOR` | *(none)* | `fetch-tekton-records.sh` | Override create_time cursor (RFC3339); skips ConfigMap read when set |
+| `TEKTON_CURSOR_CONFIGMAP` | `segment-bridge-cursor` | `fetch-tekton-records.sh` | ConfigMap name for cursor persistence between runs |
+| `TEKTON_CURSOR_NAMESPACE` | `segment-bridge` | `fetch-tekton-records.sh` | Namespace of the cursor ConfigMap |
+| `KUBECTL` | auto (`kubectl`, then `oc`) | fetch/get scripts | Kubernetes CLI; set to empty string to disable auto-detection in `fetch-tekton-records.sh` |
+| `NAMESPACE_RECENT_HOURS` | `4` | `fetch-namespace-records.sh` | Only emit tenant namespaces created or updated within this many hours |
+| `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` | Only emit AppStudio Components created or updated within this many hours |
+| `CLUSTER_ID` | `anonymous` | `get-konflux-public-info.sh`, `tekton-to-segment.sh` | Salt for anonymized hashes; auto-resolved from cluster when unset (see `get-konflux-public-info.sh`) |
+| `KONFLUX_VERSION` | *(auto)* | `tekton-to-segment.sh` | Optional Konflux version property on Segment events |
+| `KUBERNETES_VERSION` | *(auto)* | `tekton-to-segment.sh` | Optional Kubernetes version property on Segment events |
+| `SEGMENT_WRITE_KEY` | *(none)* | `tekton-main-job.sh` | Segment write key; when set, a temporary `.netrc` is generated for upload |
+| `SEGMENT_BATCH_API` | `https://api.segment.io/v1/batch` | `segment-uploader.sh`, `tekton-main-job.sh` | Segment batch API URL (direct or proxy) |
+| `CURL_NETRC` | `$HOME/.netrc` | `segment-uploader.sh` | Netrc file for HTTP Basic auth (overridden when `SEGMENT_WRITE_KEY` is set) |
+| `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` | Number of upload retries on failure |
+| `SEGMENT_BATCH_DATA_SIZE` | `501760` (490 KiB) | `segment-mass-uploader.sh` | Maximum bytes per upload batch |
+| `HEARTBEAT_TIMESTAMP` | current UTC time | `tekton-to-segment.sh` | RFC3339 timestamp for the heartbeat event |
+
+Integration test variables (`SEGMENT_BRIDGE_TEST_IMAGE`,
+`SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME`) are documented in
+[CONTRIBUTING.md](CONTRIBUTING.md). Test time overrides `NAMESPACE_NOW_ISO` and
+`COMPONENT_NOW_ISO` are documented in script headers for
+`fetch-namespace-records.sh` and `fetch-component-records.sh`.
 
 ## Deployment
 
@@ -122,9 +153,6 @@ metadata:
 stringData:
   SEGMENT_WRITE_KEY: "<your-segment-write-key>"
 ```
-
-See [CLAUDE.md](CLAUDE.md) for the full list of environment variables and
-their defaults.
 
 [1]: https://app.segment.com
 [ES1]: https://segment.com/blog/exactly-once-delivery/

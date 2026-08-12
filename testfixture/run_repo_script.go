@@ -29,6 +29,7 @@ var bundledScriptBaseNames = map[string]struct{}{
 	"fetch-namespace-records.sh":   {},
 	"fetch-component-records.sh":   {},
 	"fetch-application-records.sh": {},
+	"fetch-release-records.sh":     {},
 	"get-konflux-public-info.sh":   {},
 	"tekton-to-segment.sh":         {},
 	"segment-uploader.sh":          {},

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -35,16 +36,16 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-const scriptPath = "../scripts/fetch-application-records.sh"
+const scriptPath = "../scripts/fetch-release-records.sh"
 
-const sampleDir = "testdata/application-samples"
+const sampleDir = "testdata/release-samples"
 
-const waitApplicationTimeout = 10 * time.Second
-const waitApplicationPoll = 100 * time.Millisecond
+const waitReleaseTimeout = 10 * time.Second
+const waitReleasePoll = 100 * time.Millisecond
 
-var applicationGroupKind = schema.GroupKind{Group: "appstudio.redhat.com", Kind: "Application"}
+var releaseGroupKind = schema.GroupKind{Group: "appstudio.redhat.com", Kind: "Release"}
 
-const applicationAPIVersion = "v1alpha1"
+const releaseAPIVersion = "v1alpha1"
 
 func buildRestConfig(t *testing.T) *rest.Config {
 	t.Helper()
@@ -55,55 +56,55 @@ func buildRestConfig(t *testing.T) *rest.Config {
 	return config
 }
 
-func waitForApplicationRESTMapping(ctx context.Context, t *testing.T, disco discovery.CachedDiscoveryInterface) *restmapper.DeferredDiscoveryRESTMapper {
+func waitForReleaseRESTMapping(ctx context.Context, t *testing.T, disco discovery.CachedDiscoveryInterface) *restmapper.DeferredDiscoveryRESTMapper {
 	t.Helper()
-	deadline := time.Now().Add(waitApplicationTimeout)
+	deadline := time.Now().Add(waitReleaseTimeout)
 	var lastErr error
 	for time.Now().Before(deadline) {
 		disco.Invalidate()
 		m := restmapper.NewDeferredDiscoveryRESTMapper(disco)
-		_, lastErr = m.RESTMapping(applicationGroupKind, applicationAPIVersion)
+		_, lastErr = m.RESTMapping(releaseGroupKind, releaseAPIVersion)
 		if lastErr == nil {
 			return m
 		}
 		select {
 		case <-ctx.Done():
-			require.Fail(t, "context cancelled while waiting for Application RESTMapping")
-		case <-time.After(waitApplicationPoll):
+			require.Fail(t, "context cancelled while waiting for Release RESTMapping")
+		case <-time.After(waitReleasePoll):
 		}
 	}
-	require.Fail(t, fmt.Sprintf("timeout waiting for Application RESTMapping after %v: %v",
-		waitApplicationTimeout, lastErr))
+	require.Fail(t, fmt.Sprintf("timeout waiting for Release RESTMapping after %v: %v",
+		waitReleaseTimeout, lastErr))
 	return nil
 }
 
-func waitForApplicationPresent(ctx context.Context, t *testing.T, dynClient dynamic.Interface, mapper *restmapper.DeferredDiscoveryRESTMapper, namespace, applicationName string) {
+func waitForReleasePresent(ctx context.Context, t *testing.T, dynClient dynamic.Interface, mapper *restmapper.DeferredDiscoveryRESTMapper, namespace, releaseName string) {
 	t.Helper()
-	mapping, err := mapper.RESTMapping(applicationGroupKind, applicationAPIVersion)
-	require.NoError(t, err, "RESTMapping for Application before wait")
+	mapping, err := mapper.RESTMapping(releaseGroupKind, releaseAPIVersion)
+	require.NoError(t, err, "RESTMapping for Release before wait")
 	gvr := mapping.Resource
 	ri := dynClient.Resource(gvr).Namespace(namespace)
-	deadline := time.Now().Add(waitApplicationTimeout)
+	deadline := time.Now().Add(waitReleaseTimeout)
 	var lastErr error
 	for time.Now().Before(deadline) {
-		_, lastErr = ri.Get(ctx, applicationName, metav1.GetOptions{})
+		_, lastErr = ri.Get(ctx, releaseName, metav1.GetOptions{})
 		if lastErr == nil {
 			return
 		}
 		if !errors.IsNotFound(lastErr) {
-			require.NoError(t, lastErr, "unexpected error waiting for Application %s/%s", namespace, applicationName)
+			require.NoError(t, lastErr, "unexpected error waiting for Release %s/%s", namespace, releaseName)
 		}
 		select {
 		case <-ctx.Done():
-			require.Fail(t, "context cancelled while waiting for Application %s/%s", namespace, applicationName)
-		case <-time.After(waitApplicationPoll):
+			require.Fail(t, "context cancelled while waiting for Release %s/%s", namespace, releaseName)
+		case <-time.After(waitReleasePoll):
 		}
 	}
-	require.Fail(t, fmt.Sprintf("timeout waiting for Application %s/%s after %v: %v",
-		namespace, applicationName, waitApplicationTimeout, lastErr))
+	require.Fail(t, fmt.Sprintf("timeout waiting for Release %s/%s after %v: %v",
+		namespace, releaseName, waitReleaseTimeout, lastErr))
 }
 
-func applyApplicationSampleDir(t *testing.T, inputDir string) {
+func applyReleaseSampleDir(t *testing.T, inputDir string) {
 	t.Helper()
 	ctx := context.Background()
 	config := buildRestConfig(t)
@@ -175,23 +176,23 @@ func applyApplicationSampleDir(t *testing.T, inputDir string) {
 			require.NoError(t, err, "apply resource from %s", path)
 
 			if gvk.Kind == "CustomResourceDefinition" {
-				mapper = waitForApplicationRESTMapping(ctx, t, disco)
+				mapper = waitForReleaseRESTMapping(ctx, t, disco)
 			}
-			if gvk.Kind == "Application" {
-				waitForApplicationPresent(ctx, t, dynClient, mapper, obj.GetNamespace(), obj.GetName())
+			if gvk.Kind == "Release" {
+				waitForReleasePresent(ctx, t, dynClient, mapper, obj.GetNamespace(), obj.GetName())
 			}
 		}
 	}
 }
 
-func TestFetchApplicationRecords(t *testing.T) {
+func TestFetchReleaseRecords(t *testing.T) {
 	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
 		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
-		applyApplicationSampleDir(t, sampleDir)
+		applyReleaseSampleDir(t, sampleDir)
 
 		now := time.Now().UTC().Format(time.RFC3339)
 		output := scripts.AssertExecuteScriptWithEnv(t, scriptPath, map[string]string{
-			"APPLICATION_NOW_ISO": now,
+			"RELEASE_NOW_ISO": now,
 		})
 		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 		var nonEmpty []string
@@ -200,54 +201,101 @@ func TestFetchApplicationRecords(t *testing.T) {
 				nonEmpty = append(nonEmpty, strings.TrimSpace(line))
 			}
 		}
-		require.Len(t, nonEmpty, 1, "expected exactly one JSON line (one application), got %d", len(nonEmpty))
+		require.Len(t, nonEmpty, 1, "expected exactly one JSON line (one release), got %d", len(nonEmpty))
 
-		var app map[string]interface{}
-		require.NoError(t, json.Unmarshal([]byte(nonEmpty[0]), &app), "output must be valid JSON")
-		kind, _ := app["kind"].(string)
-		assert.Equal(t, "Application", kind)
-		appMeta, _ := app["metadata"].(map[string]interface{})
-		require.NotNil(t, appMeta)
-		name, _ := appMeta["name"].(string)
-		assert.Equal(t, "kwok-test-application", name)
+		var rel map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(nonEmpty[0]), &rel), "output must be valid JSON")
+		kind, _ := rel["kind"].(string)
+		assert.Equal(t, "Release", kind)
+		relMeta, _ := rel["metadata"].(map[string]interface{})
+		require.NotNil(t, relMeta)
+		name, _ := relMeta["name"].(string)
+		assert.Equal(t, "kwok-test-release", name)
 	})
 }
 
-func TestFetchApplicationRecordsExitsZeroWhenApplicationCRDNotInstalled(t *testing.T) {
+func TestFetchReleaseRecordsExitsZeroWhenReleaseCRDNotInstalled(t *testing.T) {
 	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
 		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
 		now := time.Now().UTC().Format(time.RFC3339)
-		merged := append(os.Environ(), "APPLICATION_NOW_ISO="+now)
+		merged := append(os.Environ(), "RELEASE_NOW_ISO="+now)
 		out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, merged)
 		require.NoError(t, err,
-			"script must exit 0 when Application API is absent (stderr=%q)", string(stderr))
+			"script must exit 0 when Release API is absent (stderr=%q)", string(stderr))
 		assert.Empty(t, strings.TrimSpace(string(out)), "stdout must be empty when skipping")
 		assert.Contains(t, strings.ToLower(string(stderr)), "skipping",
 			"expected skip WARNING on stderr")
 	})
 }
 
-func TestFetchApplicationRecordsFiltersOldApplications(t *testing.T) {
-	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
-		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
-		applyApplicationSampleDir(t, sampleDir)
+// jqFilterTimeWindow matches fetch-release-records.sh (effective time vs cutoff).
+const jqFilterTimeWindow = `
+  .items[]? |
+  (([.metadata.creationTimestamp] + [.metadata.managedFields[]?.time // empty] | map(select(. != null)) | max) // .metadata.creationTimestamp) as $eff |
+  select($eff != null and ($eff | fromdateiso8601) >= ($cutoff | fromdateiso8601)) |
+  .
+`
 
-		// Set APPLICATION_NOW_ISO to a point far in the future so the 4-hour
-		// cutoff (futureNow - 4h) is still well ahead of now, meaning the
-		// sample application (created just now by kwok) is below the cutoff
-		// and therefore filtered out.
-		futureNow := time.Now().UTC().Add(48 * time.Hour).Format(time.RFC3339)
-		out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, append(
-			os.Environ(),
-			"APPLICATION_NOW_ISO="+futureNow,
-		))
-		require.NoError(t, err, "script must exit 0 (stderr=%q)", string(stderr))
-		assert.Empty(t, strings.TrimSpace(string(out)),
-			"expected no output: application must be filtered out when the time window is entirely in the future")
-	})
+func TestReleaseTimeWindowFilter(t *testing.T) {
+	now := time.Now().UTC()
+	cutoff := now.Add(-4 * time.Hour).Format(time.RFC3339)
+	tsOld := now.Add(-5 * time.Hour).Format(time.RFC3339)
+	tsRecent := now.Add(-2 * time.Hour).Format(time.RFC3339)
+
+	input := map[string]interface{}{
+		"items": []map[string]interface{}{
+			{
+				"apiVersion": "appstudio.redhat.com/v1alpha1",
+				"kind":       "Release",
+				"metadata": map[string]interface{}{
+					"name":              "old-release",
+					"namespace":         "default",
+					"creationTimestamp": tsOld,
+				},
+			},
+			{
+				"apiVersion": "appstudio.redhat.com/v1alpha1",
+				"kind":       "Release",
+				"metadata": map[string]interface{}{
+					"name":              "recent-release",
+					"namespace":         "default",
+					"creationTimestamp": tsRecent,
+				},
+			},
+		},
+	}
+	data, err := json.Marshal(input)
+	require.NoError(t, err)
+
+	tmp, err := os.CreateTemp(t.TempDir(), "rel-*.json")
+	require.NoError(t, err)
+	_, err = tmp.Write(data)
+	require.NoError(t, err)
+	require.NoError(t, tmp.Close())
+
+	cmd := exec.Command("jq", "-c", "--arg", "cutoff", cutoff, strings.TrimSpace(jqFilterTimeWindow), tmp.Name())
+	cmd.Stderr = os.Stderr
+	output, err := cmd.Output()
+	require.NoError(t, err, "run jq filter")
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	var nonEmpty []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			nonEmpty = append(nonEmpty, strings.TrimSpace(line))
+		}
+	}
+	require.Len(t, nonEmpty, 1, "expected one JSON line (only recent release within 4h), got %d", len(nonEmpty))
+	var rel map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(nonEmpty[0]), &rel))
+	relMeta, _ := rel["metadata"].(map[string]interface{})
+	require.NotNil(t, relMeta)
+	assert.Equal(t, "Release", rel["kind"])
+	name, _ := relMeta["name"].(string)
+	assert.Equal(t, "recent-release", name)
 }
 
-func applicationStubEnv(t *testing.T, stubDir string, extra map[string]string) []string {
+func releaseStubEnv(t *testing.T, stubDir string, extra map[string]string) []string {
 	t.Helper()
 	t.Setenv(testfixture.EnvTestImage, "")
 	env := testfixture.EnvWithStubPath(stubDir)
@@ -260,17 +308,17 @@ func applicationStubEnv(t *testing.T, stubDir string, extra map[string]string) [
 	return env
 }
 
-func TestApplicationAPIMissingError(t *testing.T) {
+func TestReleaseAPIMissingError(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("requires GNU date -d (Linux only)")
 	}
 	stubDir := t.TempDir()
 	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
-echo 'error: the server doesn'\''t have a resource type "applications.appstudio.redhat.com"' >&2
+echo 'error: the server doesn'\''t have a resource type "releases.appstudio.redhat.com"' >&2
 exit 1
 `)
-	env := applicationStubEnv(t, stubDir, map[string]string{
-		"APPLICATION_NOW_ISO": "2024-06-01T12:00:00Z",
+	env := releaseStubEnv(t, stubDir, map[string]string{
+		"RELEASE_NOW_ISO": "2024-06-01T12:00:00Z",
 	})
 	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
 	require.NoError(t, err)
@@ -279,17 +327,17 @@ exit 1
 	assert.Contains(t, strings.ToLower(string(stderr)), "skipping")
 }
 
-func TestApplicationRBACForbidden(t *testing.T) {
+func TestReleaseRBACForbidden(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("requires GNU date -d (Linux only)")
 	}
 	stubDir := t.TempDir()
 	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
-echo 'Error from server (Forbidden): applications.appstudio.redhat.com is forbidden' >&2
+echo 'Error from server (Forbidden): releases.appstudio.redhat.com is forbidden' >&2
 exit 1
 `)
-	env := applicationStubEnv(t, stubDir, map[string]string{
-		"APPLICATION_NOW_ISO": "2024-06-01T12:00:00Z",
+	env := releaseStubEnv(t, stubDir, map[string]string{
+		"RELEASE_NOW_ISO": "2024-06-01T12:00:00Z",
 	})
 	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
 	require.Error(t, err)
@@ -297,7 +345,7 @@ exit 1
 	assert.Contains(t, string(stderr), "forbidden")
 }
 
-func TestApplicationJqFailure(t *testing.T) {
+func TestReleaseJqFailure(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("requires GNU date -d (Linux only)")
 	}
@@ -306,15 +354,15 @@ func TestApplicationJqFailure(t *testing.T) {
 echo 'not json'
 exit 0
 `)
-	env := applicationStubEnv(t, stubDir, map[string]string{
-		"APPLICATION_NOW_ISO": "2024-06-01T12:00:00Z",
+	env := releaseStubEnv(t, stubDir, map[string]string{
+		"RELEASE_NOW_ISO": "2024-06-01T12:00:00Z",
 	})
 	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
 	require.Error(t, err)
 	assert.Contains(t, string(stderr), "jq failed")
 }
 
-func TestApplicationKubectlWarnings(t *testing.T) {
+func TestReleaseKubectlWarnings(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("requires GNU date -d (Linux only)")
 	}
@@ -324,8 +372,8 @@ echo '{"items":[]}'
 echo 'W0923 warning: deprecated API' >&2
 exit 0
 `)
-	env := applicationStubEnv(t, stubDir, map[string]string{
-		"APPLICATION_NOW_ISO": "2024-06-01T12:00:00Z",
+	env := releaseStubEnv(t, stubDir, map[string]string{
+		"RELEASE_NOW_ISO": "2024-06-01T12:00:00Z",
 	})
 	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
 	require.NoError(t, err)
@@ -333,7 +381,7 @@ exit 0
 	assert.Contains(t, string(stderr), "deprecated API")
 }
 
-func TestApplicationEmptyResults(t *testing.T) {
+func TestReleaseEmptyResults(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("requires GNU date -d (Linux only)")
 	}
@@ -342,26 +390,26 @@ func TestApplicationEmptyResults(t *testing.T) {
 echo '{"items":[]}'
 exit 0
 `)
-	env := applicationStubEnv(t, stubDir, map[string]string{
-		"APPLICATION_NOW_ISO":      "2024-06-01T12:00:00Z",
-		"APPLICATION_RECENT_HOURS": "4",
+	env := releaseStubEnv(t, stubDir, map[string]string{
+		"RELEASE_NOW_ISO":      "2024-06-01T12:00:00Z",
+		"RELEASE_RECENT_HOURS": "4",
 	})
 	out, err := testfixture.RunRepoScript(scriptPath, nil, env)
 	require.NoError(t, err)
 	assert.Empty(t, strings.TrimSpace(string(out)))
 }
 
-func TestApplicationAPIFQNameNotFound(t *testing.T) {
+func TestReleaseAPIFQNameNotFound(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("requires GNU date -d (Linux only)")
 	}
 	stubDir := t.TempDir()
 	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
-echo 'error: the server could not find the requested resource "applications.appstudio.redhat.com"' >&2
+echo 'error: the server could not find the requested resource "releases.appstudio.redhat.com"' >&2
 exit 1
 `)
-	env := applicationStubEnv(t, stubDir, map[string]string{
-		"APPLICATION_NOW_ISO": "2024-06-01T12:00:00Z",
+	env := releaseStubEnv(t, stubDir, map[string]string{
+		"RELEASE_NOW_ISO": "2024-06-01T12:00:00Z",
 	})
 	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
 	require.NoError(t, err)
@@ -370,17 +418,17 @@ exit 1
 	assert.Contains(t, strings.ToLower(string(stderr)), "skipping")
 }
 
-func TestApplicationAPINoMatchesForKind(t *testing.T) {
+func TestReleaseAPINoMatchesForKind(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("requires GNU date -d (Linux only)")
 	}
 	stubDir := t.TempDir()
 	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
-echo 'error: no matches for kind "Application" in version "appstudio.redhat.com/v1alpha1"' >&2
+echo 'error: no matches for kind "Release" in version "appstudio.redhat.com/v1alpha1"' >&2
 exit 1
 `)
-	env := applicationStubEnv(t, stubDir, map[string]string{
-		"APPLICATION_NOW_ISO": "2024-06-01T12:00:00Z",
+	env := releaseStubEnv(t, stubDir, map[string]string{
+		"RELEASE_NOW_ISO": "2024-06-01T12:00:00Z",
 	})
 	out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
 	require.NoError(t, err)
@@ -389,7 +437,7 @@ exit 1
 	assert.Contains(t, strings.ToLower(string(stderr)), "skipping")
 }
 
-func TestApplicationAPIGenericError(t *testing.T) {
+func TestReleaseAPIGenericError(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("requires GNU date -d (Linux only)")
 	}
@@ -398,15 +446,15 @@ func TestApplicationAPIGenericError(t *testing.T) {
 echo 'Error: connection timed out' >&2
 exit 1
 `)
-	env := applicationStubEnv(t, stubDir, map[string]string{
-		"APPLICATION_NOW_ISO": "2024-06-01T12:00:00Z",
+	env := releaseStubEnv(t, stubDir, map[string]string{
+		"RELEASE_NOW_ISO": "2024-06-01T12:00:00Z",
 	})
 	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
 	require.Error(t, err)
 	assert.Contains(t, strings.ToLower(string(stderr)), "error")
 }
 
-func TestApplicationNoKubectlNoOc(t *testing.T) {
+func TestReleaseNoKubectlNoOc(t *testing.T) {
 	env := testfixture.MinimalHostEnvWithoutKubectl(t)
 	_, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, env)
 	require.Error(t, err)

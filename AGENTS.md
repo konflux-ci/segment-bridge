@@ -149,6 +149,8 @@ Default branch is `main`; open PRs against `main`.
 | `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` |
 | `APPLICATION_RECENT_HOURS` | `4` | `fetch-application-records.sh` |
 | `APPLICATION_NOW_ISO` | *(none)* | `fetch-application-records.sh` — test override for "now" |
+| `RELEASE_RECENT_HOURS` | `4` | `fetch-release-records.sh` |
+| `RELEASE_NOW_ISO` | *(none)* | `fetch-release-records.sh` — test override for "now" |
 | `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` |
 | `TEKTON_MAX_PAGES` | `100` | `fetch-tekton-records.sh` |
 | `TEKTON_CURSOR` | *(none)* | `fetch-tekton-records.sh` |

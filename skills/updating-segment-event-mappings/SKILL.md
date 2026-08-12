@@ -27,6 +27,7 @@ handles a distinct record type:
 | `scripts/jq/transform-namespace.jq` | Namespace Created |
 | `scripts/jq/transform-component.jq` | Component Created |
 | `scripts/jq/transform-application.jq` | Application Created |
+| `scripts/jq/transform-release.jq` | Release Created, Release Released |
 | `scripts/jq/heartbeat.jq` | Segment Bridge Heartbeat |
 | `scripts/jq/filter-pipelineruns.jq` | Pre-filter: keep only PipelineRuns |
 

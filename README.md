@@ -16,6 +16,7 @@ flowchart TB
         B1c["fetch-namespace-records.sh"]
         B1d["fetch-component-records.sh"]
         B1e["fetch-application-records.sh"]
+        B1f["fetch-release-records.sh"]
         B2["get-konflux-public-info.sh"]
         B3["tekton-to-segment.sh"]
         subgraph B4["segment-mass-uploader.sh"]
@@ -30,6 +31,7 @@ flowchart TB
         B1c --> B2
         B1d --> B2
         B1e --> B2
+        B1f --> B2
         B2 --> B3
         B3 --> B4
     end
@@ -39,6 +41,7 @@ flowchart TB
     A2 --> B1c
     A2 --> B1d
     A2 --> B1e
+    A2 --> B1f
 
     G([Segment])
     H[(Amplitude)]
@@ -124,6 +127,7 @@ See the [`Dockerfile`](Dockerfile) header for additional usage examples.
 | `NAMESPACE_RECENT_HOURS` | `4` | `fetch-namespace-records.sh` | Only emit tenant namespaces created or updated within this many hours |
 | `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` | Only emit AppStudio Components created or updated within this many hours |
 | `APPLICATION_RECENT_HOURS` | `4` | `fetch-application-records.sh` | Only emit AppStudio Applications created or updated within this many hours |
+| `RELEASE_RECENT_HOURS` | `4` | `fetch-release-records.sh` | Only emit AppStudio Releases created or updated within this many hours |
 | `CLUSTER_ID` | `anonymous` | `get-konflux-public-info.sh`, `tekton-to-segment.sh` | Salt for anonymized hashes; auto-resolved from cluster when unset (see `get-konflux-public-info.sh`) |
 | `KONFLUX_VERSION` | *(auto)* | `tekton-to-segment.sh` | Optional Konflux version property on Segment events |
 | `KUBERNETES_VERSION` | *(auto)* | `tekton-to-segment.sh` | Optional Kubernetes version property on Segment events |
@@ -137,9 +141,9 @@ See the [`Dockerfile`](Dockerfile) header for additional usage examples.
 Integration test variables (`SEGMENT_BRIDGE_TEST_IMAGE`,
 `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME`) are documented in
 [CONTRIBUTING.md](CONTRIBUTING.md). Test time overrides `NAMESPACE_NOW_ISO`,
-`COMPONENT_NOW_ISO` and `APPLICATION_NOW_ISO` are documented in script headers
-for `fetch-namespace-records.sh`, `fetch-component-records.sh` and
-`fetch-application-records.sh`.
+`COMPONENT_NOW_ISO`, `APPLICATION_NOW_ISO` and `RELEASE_NOW_ISO` are documented
+in script headers for `fetch-namespace-records.sh`, `fetch-component-records.sh`,
+`fetch-application-records.sh` and `fetch-release-records.sh`.
 
 ## Deployment
 

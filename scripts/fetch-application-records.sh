@@ -91,9 +91,6 @@ if [[ $ret_kubectl -ne 0 ]]; then
 		exit 0
 	fi
 	echo "ERROR: $err" >&2
-	if [[ $ret_jq -ne 0 ]]; then
-		echo "ERROR: jq also failed (likely due to partial kubectl output)" >&2
-	fi
 	exit 1
 fi
 if [[ $ret_jq -ne 0 ]]; then

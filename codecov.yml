@@ -30,6 +30,13 @@ ignore:
   - "scripts/prepare-oc-client-for-build.sh"
   - "scripts/jq/"
   - "tekton-e2e/"
+  - ".agents/**"
+  - ".claude/**"
+  - ".cursor/**"
+  - "skills/**"
+  - "docs/**"
+  - "*.md"
+  - "*.toml"
 
 flags:
   unit-tests:

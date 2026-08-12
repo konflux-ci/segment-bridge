@@ -52,6 +52,6 @@ fi
 # Fetch sources are best-effort: a failing data source must not prevent the
 # remaining sources from running or abort the pipeline.  The brace group runs
 # in a subshell (left side of a pipe) so `set +e` is scoped automatically.
-{ set +e; fetch-tekton-records.sh; fetch-konflux-op-records.sh; fetch-namespace-records.sh; fetch-component-records.sh; true; } \
+{ set +e; fetch-tekton-records.sh; fetch-konflux-op-records.sh; fetch-namespace-records.sh; fetch-component-records.sh; fetch-application-records.sh; true; } \
   | get-konflux-public-info.sh tekton-to-segment.sh \
   | segment_sink

@@ -59,6 +59,7 @@ COPY --chown=root:root --chmod=755 \
     scripts/fetch-konflux-op-records.sh \
     scripts/fetch-namespace-records.sh \
     scripts/fetch-component-records.sh \
+    scripts/fetch-application-records.sh \
     scripts/get-konflux-public-info.sh \
     scripts/tekton-to-segment.sh \
     scripts/segment-uploader.sh \

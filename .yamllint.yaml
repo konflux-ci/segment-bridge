@@ -14,3 +14,4 @@ ignore:
   - fetch-konflux-op-records/sample/
   - fetch-namespace-records/testdata/
   - fetch-component-records/testdata/
+  - fetch-application-records/testdata/

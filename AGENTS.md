@@ -145,10 +145,20 @@ Default branch is `main`; open PRs against `main`.
 | `SEGMENT_WRITE_KEY` | *(none)* | `tekton-main-job.sh` — generates `.netrc` |
 | `CLUSTER_ID` | `anonymous` | `tekton-to-segment.sh` — namespace hashing |
 | `KUBECTL` | auto-detect | All `fetch-*.sh` / `get-konflux-public-info.sh` |
-| `TEKTON_CURSOR_CONFIGMAP` | `segment-bridge-cursor` | `fetch-tekton-records.sh` — cursor ConfigMap name |
-| `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests — run scripts inside image |
-
-All other env vars are documented in script headers and discoverable via `grep -r 'export\|:-'`.
+| `NAMESPACE_RECENT_HOURS` | `4` | `fetch-namespace-records.sh` |
+| `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` |
+| `APPLICATION_RECENT_HOURS` | `4` | `fetch-application-records.sh` |
+| `APPLICATION_NOW_ISO` | *(none)* | `fetch-application-records.sh` — test override for "now" |
+| `RELEASE_RECENT_HOURS` | `4` | `fetch-release-records.sh` |
+| `RELEASE_NOW_ISO` | *(none)* | `fetch-release-records.sh` — test override for "now" |
+| `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` |
+| `TEKTON_MAX_PAGES` | `100` | `fetch-tekton-records.sh` |
+| `TEKTON_CURSOR` | *(none)* | `fetch-tekton-records.sh` |
+| `TEKTON_CURSOR_CONFIGMAP` | `segment-bridge-cursor` | `fetch-tekton-records.sh` |
+| `TEKTON_CURSOR_NAMESPACE` | `segment-bridge` | `fetch-tekton-records.sh` |
+| `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` |
+| `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests |
+| `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` | auto (`podman`→`docker`) | Go tests |
 
 ## Toolchain
 

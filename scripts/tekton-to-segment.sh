@@ -77,6 +77,7 @@ hash_application_in_namespace() {
   echo -n "${application}:${ns}:${CLUSTER_ID}" | sha256sum | cut -c1-12
 }
 
+
 # transform_konflux_record: Transform a single Konflux CR JSON into two Segment events
 #   (Operator Deployment Started + Completed).
 # Arguments:
@@ -161,6 +162,27 @@ transform_component_record() {
     --arg kubernetes_version "${KUBERNETES_VERSION:-}"
 }
 
+# transform_application_record: Transform a single Application JSON into one Segment event
+#   (Application Created). Timestamp is metadata.creationTimestamp.
+# Arguments:
+#   $1 - Application JSON record
+#   $2 - Pre-computed namespace hash (metadata.namespace + CLUSTER_ID)
+#   $3 - Pre-computed application hash (name:namespace:CLUSTER_ID)
+#   $4 - Pre-computed cluster ID hash (empty when Konflux info not added)
+transform_application_record() {
+  local record="$1"
+  local ns_hash="$2"
+  local application_hash="$3"
+  local cluster_id_hash="$4"
+
+  echo "$record" | jq -c -f "$SELFDIR/jq/transform-application.jq" \
+    --arg ns_hash "$ns_hash" \
+    --arg application_hash "$application_hash" \
+    --arg cluster_id_hash "$cluster_id_hash" \
+    --arg konflux_version "${KONFLUX_VERSION:-}" \
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}"
+}
+
 # Precompute cluster ID hash when Konflux info will be added (so we never send raw cluster ID)
 cluster_id_hash=""
 if [[ -n "${CLUSTER_ID:-}" ]]; then
@@ -198,6 +220,15 @@ while IFS= read -r record; do
     application_hash=$(hash_application_in_namespace "$application" "$ns")
     transform_component_record "$record" "$ns_hash" "$component_hash" \
       "$application_hash" "$cluster_id_hash"
+    continue
+  fi
+  if [[ "$kind" == "Application" ]]; then
+    ns=$(echo "$record" | jq -r '.metadata.namespace // "unknown"')
+    app_name=$(echo "$record" | jq -r '.metadata.name // "unknown"')
+    ns_hash=$(hash_namespace "$ns")
+    application_hash=$(hash_application_in_namespace "$app_name" "$ns")
+    transform_application_record "$record" "$ns_hash" "$application_hash" \
+      "$cluster_id_hash"
     continue
   fi
   [[ "$kind" != "PipelineRun" ]] && continue

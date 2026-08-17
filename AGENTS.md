@@ -1,14 +1,16 @@
 # AGENTS.md — AI coding agent context for segment-bridge
 
 This file is the single source of truth for **all** AI coding agents working on
-this repository (Cursor, Claude Code, Copilot, Codex, etc.). Agent-specific
-files like `CLAUDE.md` may exist as thin complements; this file is canonical.
+this repository (Cursor, Claude Code, Copilot, Codex, etc.).
 
 ## What this repo does
 
 Shell + Go pipeline that fetches anonymous Tekton PipelineRun telemetry from
 [Konflux](https://konflux-ci.dev/) clusters and uploads it to
 [Segment](https://segment.com/) (and downstream analytics such as Amplitude).
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup, testing, and review
+guidelines.
 
 The container entrypoint (`scripts/tekton-main-job.sh`, installed to
 `/usr/local/bin/tekton-main-job.sh` in the image) orchestrates:
@@ -36,6 +38,8 @@ SEGMENT_BRIDGE_TEST_IMAGE=segment-bridge:test go test ./...
 
 ### Single-file verification
 
+Lint and type-check a single file (fast, no full build):
+
 ```bash
 golangci-lint run ./path/to/file.go
 shellcheck path/to/file.sh
@@ -48,21 +52,14 @@ yamllint path/to/file.yaml
 |------|---------|
 | `scripts/` | Shell scripts: fetch, transform, upload pipeline |
 | `scripts/jq/` | jq transforms mapping NDJSON to Segment events |
-| `fetch-*/` | Go test packages for each fetch script |
-| `fetch-konflux-op-records/` | Go tests for `fetch-konflux-op-records.sh` |
-| `get-konflux-public-info/` | Go tests for `get-konflux-public-info.sh` |
-| `tekton-main-job/` | Go tests for the `tekton-main-job.sh` orchestrator |
-| `tekton-to-segment/` | Go tests + sample fixtures for the transform step |
-| `segment/` | Go tests for the uploader |
+| `segment/`, `tekton-to-segment/`, … | Go test package per script (one dir mirrors one `scripts/*.sh`) |
 | `tekton-e2e/` | End-to-end tests (build tag `e2e`) |
-| `containerfixture/` | Go test helper: run scripts inside containers |
-| `testfixture/` | Go test helper: manage kwok clusters for tests |
-| `webfixture/` | Go test helper: HTTP server fixture for upload tests |
-| `stats/` | Go utility: simple statistics helpers used by tests |
+| `*fixture/` | Go test helpers (container runtime, kwok clusters, HTTP mocks) |
 | `kwok/` | Kwok Dockerfile + manifests for local K8s simulation |
 | `config/` | Kubernetes Kustomize manifests for deployment |
 | `schema/` | JSON Schema definitions for Segment analytics events |
 | `data/` | Static data files (e.g. CA trust bundles) |
+| `stats/` | Go utility: simple statistics helpers used by tests |
 | `skills/` | Agent skill files for common change types |
 | `docs/adr/` | Architecture Decision Records |
 
@@ -93,16 +90,10 @@ data source does not abort the pipeline. Individual scripts still use
 When both exist, scripts choose `kubectl` (kwok kubeconfigs work better with
 upstream kubectl). Override: `KUBECTL=oc`.
 
-### Pre-commit is mandatory
-
-Run `make pre-commit` before pushing. CI runs the same checks (yamllint,
-shellcheck, gitlint, golangci-lint, go-mod-tidy, gitleaks, markdownlint,
-actionlint).
-
 ## Commit message format
 
-Conventional Commits enforced by gitlint (see `.gitlint`). Every commit must
-satisfy:
+Conventional Commits enforced by gitlint (see `.gitlint`). Prefer
+`type(JIRA-ID): description` when a ticket applies. Every commit must satisfy:
 
 - **Title:** `type(scope): description` — type is one of: fix, feat, chore,
   docs, style, refactor, perf, test, revert, ci, build.
@@ -115,7 +106,7 @@ satisfy:
 Example:
 
 ```text
-feat(KFLUXVNGD-785): add fetch script
+feat(PROJ-123): add fetch script
 
 Add script to fetch Konflux operator CR from the
 cluster, with kwok tests.
@@ -123,7 +114,10 @@ cluster, with kwok tests.
 Signed-off-by: Your Name <your-email@example.com>
 ```
 
-**Validation:** run `gitlint --commits HEAD~1..HEAD` before pushing.
+Default branch is `main`; open PRs against `main`.
+
+**Validation:** run `gitlint --commits HEAD~1..HEAD` before pushing (or
+`gitlint --commits origin/main..HEAD` for a multi-commit branch).
 
 ## Testing conventions
 
@@ -137,11 +131,7 @@ Signed-off-by: Your Name <your-email@example.com>
 - **Integration tests:** set `SEGMENT_BRIDGE_TEST_IMAGE` to run scripts inside
   the built container image.
 - **E2E tests:** use `-tags=e2e` build tag, located in `tekton-e2e/`.
-- **Code coverage:** new and changed code must meet project coverage
-  thresholds. See `codecov.yml` and the CI workflows that upload coverage
-  (`unit_tests.yaml`, `shell_coverage.yaml`, `e2e_tests.yaml`) for the
-  authoritative configuration — do not hardcode threshold percentages in
-  documentation.
+- **Code coverage:**  New code must not decrease line coverage.
 
 ## Key environment variables
 
@@ -151,31 +141,28 @@ Signed-off-by: Your Name <your-email@example.com>
 | `TEKTON_NAMESPACE` | `-` (all) | `fetch-tekton-records.sh` |
 | `TEKTON_RESULTS_TOKEN` | SA token file | `fetch-tekton-records.sh` |
 | `SEGMENT_BATCH_API` | `https://api.segment.io/v1/batch` | `segment-uploader.sh` |
-| `SEGMENT_WRITE_KEY` | *(none)* | `tekton-main-job.sh` |
 | `CURL_NETRC` | `$HOME/.netrc` | `segment-uploader.sh` |
-| `CLUSTER_ID` | `anonymous` | `tekton-to-segment.sh` |
+| `SEGMENT_WRITE_KEY` | *(none)* | `tekton-main-job.sh` — generates `.netrc` |
+| `CLUSTER_ID` | `anonymous` | `tekton-to-segment.sh` — namespace hashing |
 | `KUBECTL` | auto-detect | All `fetch-*.sh` / `get-konflux-public-info.sh` |
-| `NAMESPACE_RECENT_HOURS` | `4` | `fetch-namespace-records.sh` |
-| `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` |
-| `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` |
-| `TEKTON_MAX_PAGES` | `100` | `fetch-tekton-records.sh` |
-| `TEKTON_CURSOR` | *(none)* | `fetch-tekton-records.sh` |
-| `TEKTON_CURSOR_CONFIGMAP` | `segment-bridge-cursor` | `fetch-tekton-records.sh` |
-| `TEKTON_CURSOR_NAMESPACE` | `segment-bridge` | `fetch-tekton-records.sh` |
-| `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` |
-| `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests |
-| `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` | auto (`podman`→`docker`) | Go tests |
+| `TEKTON_CURSOR_CONFIGMAP` | `segment-bridge-cursor` | `fetch-tekton-records.sh` — cursor ConfigMap name |
+| `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests — run scripts inside image |
+
+All other env vars are documented in script headers and discoverable via `grep -r 'export\|:-'`.
 
 ## Toolchain
 
+Go module: `github.com/redhat-appstudio/segment-bridge.git` (see `go.mod`).
+
 Pinned in `mise.toml`: Go (version must match `go.mod`), kubectl, oc,
 Python 3.11. Use `mise exec -- <cmd>` or `make` targets (which wrap mise).
-Always check `mise.toml` and `go.mod` for the authoritative Go version —
+Always check `mise.toml` and `go.mod` for the authoritative Go version:
 do not rely on any version number written in documentation.
 
 ## Pattern references (skills)
 
-For common change types, follow the canonical skill under `skills/`:
+For common change types, follow the canonical skill under `skills/` (also
+linked via `.claude/skills/`):
 
 | Change type | Skill |
 |-------------|-------|
@@ -191,22 +178,8 @@ For common change types, follow the canonical skill under `skills/`:
   plugin).
 - **Do not** introduce Kind clusters in tests — use kwok.
 - **Do not** push without running `make pre-commit` and
-  `gitlint --commits origin/main..HEAD`.
+  `gitlint --commits origin/main..HEAD`. If pre-commit fails, fix locally and
+  amend — do not add fix-up commits.
 - **Do not** add new sample/fixture YAML directories without adding them to
   `.yamllint.yaml`'s `ignore` list.
 - **Do not** commit `.env` files, secrets, or credentials.
-
-## Yamllint: avoiding failures
-
-The project uses yamllint (config in `.yamllint.yaml`). If you add a new sample
-or fixture directory containing YAML with long lines or non-standard formatting,
-add it to the `ignore` list in `.yamllint.yaml`. Do not reformat fixture YAML —
-keep test data realistic.
-
-## Code review expectations
-
-- 2 approvals required per PR.
-- All comments must be addressed (fixed or replied).
-- PRs should be atomic and focused — split large changes.
-- All new functionality must have unit tests.
-- PRs must be open for at least 1 workday across all team time zones.

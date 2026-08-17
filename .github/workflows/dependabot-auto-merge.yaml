@@ -1,10 +1,28 @@
 ---
+# GitHub does not reliably move a PR into the merge queue when the last
+# outstanding requirement (an approving review, or a check that was
+# already green before auto-merge got turned on) is satisfied *after*
+# auto-merge was enabled. The PR is left with auto-merge enabled and
+# mergeStateStatus: CLEAN, but never gets a merge_group build.
+# See https://github.com/konflux-ci/segment-bridge/issues/229.
+#
+# `enqueue-stuck-prs` works around this by calling the same
+# `enqueuePullRequest` GraphQL mutation GitHub's own "Merge when ready"
+# button uses, for any open PR that already opted into auto-merge and is
+# otherwise mergeable. It runs on review submission (the common trigger
+# for the stall) and on a schedule as a safety net.
 name: Konflux bot auto-merge
 "on":
   pull_request:
     types:
       - opened
       - reopened
+  pull_request_review:
+    types:
+      - submitted
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -13,7 +31,9 @@ permissions:
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
-    if: github.actor == 'red-hat-konflux[bot]'
+    if: >-
+      github.event_name == 'pull_request'
+      && github.actor == 'red-hat-konflux[bot]'
     steps:
       - name: Auto-merge Konflux non-major updates
         if: >-
@@ -24,3 +44,58 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  enqueue-stuck-prs:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    concurrency:
+      group: enqueue-stuck-prs-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Enqueue PRs stuck with auto-merge enabled
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Capture into a variable first so a failed `gh pr list` (auth,
+          # network, rate limit) surfaces as a job failure instead of being
+          # silently treated as "no stuck PRs" (mapfile can't see the exit
+          # status of a command run via process substitution).
+          node_ids_output=$(
+            gh pr list --repo "$REPO" --state open \
+              --json id,autoMergeRequest,mergeStateStatus \
+              --jq '.[]
+                | select(.autoMergeRequest != null)
+                | select(.mergeStateStatus == "CLEAN"
+                    or .mergeStateStatus == "UNSTABLE"
+                    or .mergeStateStatus == "HAS_HOOKS")
+                | .id'
+          ) || { echo "::error::Failed to list open PRs"; exit 1; }
+
+          mapfile -t node_ids <<<"$node_ids_output"
+
+          if [[ -z "${node_ids_output}" ]]; then
+            echo "No stuck auto-merge PRs found."
+            exit 0
+          fi
+
+          for node_id in "${node_ids[@]}"; do
+            echo "Enqueuing PR node $node_id into the merge queue"
+            # Sanitize before interpolating into a `::warning::` workflow
+            # command: node_id is an opaque GitHub GraphQL ID (not
+            # user-controlled), but stripping `::` keeps the pattern safe
+            # even if that assumption ever changes.
+            sanitized_id="${node_id//::/-}"
+            skip_msg="Could not enqueue $sanitized_id (already queued,"
+            skip_msg+=" not ready, or already merged)"
+            # shellcheck disable=SC2016 # $id is a GraphQL variable, not bash
+            gh api graphql -f query='
+              mutation($id: ID!) {
+                enqueuePullRequest(input: {pullRequestId: $id}) {
+                  mergeQueueEntry { id }
+                }
+              }' -f id="$node_id" \
+              || echo "::warning::$skip_msg"
+          done

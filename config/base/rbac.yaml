@@ -31,6 +31,20 @@ rules:
       - components
     verbs:
       - list
+  # fetch-application-records.sh: list AppStudio Applications cluster-wide
+  - apiGroups:
+      - appstudio.redhat.com
+    resources:
+      - applications
+    verbs:
+      - list
+  # fetch-release-records.sh: list AppStudio Releases cluster-wide
+  - apiGroups:
+      - appstudio.redhat.com
+    resources:
+      - releases
+    verbs:
+      - list
   - apiGroups:
       - config.openshift.io
     resources:

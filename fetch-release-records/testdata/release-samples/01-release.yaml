@@ -1,0 +1,15 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Release
+metadata:
+  name: kwok-test-release
+  namespace: default
+spec:
+  snapshot: kwok-test-snapshot
+  releasePlan: kwok-test-release-plan
+status:
+  completionTime: "2024-06-01T13:00:00Z"
+  conditions:
+    - type: Released
+      status: "True"
+      reason: Succeeded
+      lastTransitionTime: "2024-06-01T13:00:00Z"

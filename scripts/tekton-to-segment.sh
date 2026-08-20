@@ -14,6 +14,13 @@
 #   For each Component (from fetch-component-records.sh or inline records), one event:
 #     "Component Created" - timestamped at metadata.creationTimestamp
 #
+#   For each Application (from fetch-application-records.sh), one event:
+#     "Application Created" - timestamped at metadata.creationTimestamp
+#
+#   For each Release (from fetch-release-records.sh), up to two events:
+#     "Release Created"  - timestamped at metadata.creationTimestamp
+#     "Release Released" - timestamped at status.completionTime (only when present)
+#
 #   This script is part of the Tekton Results bridge pipeline:
 #   ... | tekton-to-segment.sh | segment-mass-uploader.sh
 #
@@ -75,6 +82,27 @@ hash_application_in_namespace() {
   local application="$1"
   local ns="$2"
   echo -n "${application}:${ns}:${CLUSTER_ID}" | sha256sum | cut -c1-12
+}
+
+# hash_release_identity: SHA256(releaseName:namespace:cluster_id), first 12 hex chars.
+hash_release_identity() {
+  local name="$1"
+  local ns="$2"
+  echo -n "${name}:${ns}:${CLUSTER_ID}" | sha256sum | cut -c1-12
+}
+
+# hash_snapshot_in_namespace: SHA256(snapshot:namespace:cluster_id), first 12 hex chars.
+hash_snapshot_in_namespace() {
+  local snapshot="$1"
+  local ns="$2"
+  echo -n "${snapshot}:${ns}:${CLUSTER_ID}" | sha256sum | cut -c1-12
+}
+
+# hash_release_plan_in_namespace: SHA256(releasePlan:namespace:cluster_id), first 12 hex chars.
+hash_release_plan_in_namespace() {
+  local release_plan="$1"
+  local ns="$2"
+  echo -n "${release_plan}:${ns}:${CLUSTER_ID}" | sha256sum | cut -c1-12
 }
 
 # transform_konflux_record: Transform a single Konflux CR JSON into two Segment events
@@ -161,6 +189,54 @@ transform_component_record() {
     --arg kubernetes_version "${KUBERNETES_VERSION:-}"
 }
 
+# transform_release_record: Transform a single Release JSON into two Segment events
+#   (Release Created + Release Released).
+# Arguments:
+#   $1 - Release JSON record
+#   $2 - Pre-computed namespace hash (metadata.namespace + CLUSTER_ID)
+#   $3 - Pre-computed release hash (name:namespace:CLUSTER_ID)
+#   $4 - Pre-computed snapshot hash (spec.snapshot:namespace:CLUSTER_ID)
+#   $5 - Pre-computed release plan hash (spec.releasePlan:namespace:CLUSTER_ID)
+#   $6 - Pre-computed cluster ID hash (empty when Konflux info not added)
+transform_release_record() {
+  local record="$1"
+  local ns_hash="$2"
+  local release_hash="$3"
+  local snapshot_hash="$4"
+  local release_plan_hash="$5"
+  local cluster_id_hash="$6"
+
+  echo "$record" | jq -c -f "$SELFDIR/jq/transform-release.jq" \
+    --arg ns_hash "$ns_hash" \
+    --arg release_hash "$release_hash" \
+    --arg snapshot_hash "$snapshot_hash" \
+    --arg release_plan_hash "$release_plan_hash" \
+    --arg cluster_id_hash "$cluster_id_hash" \
+    --arg konflux_version "${KONFLUX_VERSION:-}" \
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}"
+}
+
+# transform_application_record: Transform a single Application JSON into one Segment event
+#   (Application Created). Timestamp is metadata.creationTimestamp.
+# Arguments:
+#   $1 - Application JSON record
+#   $2 - Pre-computed namespace hash (metadata.namespace + CLUSTER_ID)
+#   $3 - Pre-computed application hash (name:namespace:CLUSTER_ID)
+#   $4 - Pre-computed cluster ID hash (empty when Konflux info not added)
+transform_application_record() {
+  local record="$1"
+  local ns_hash="$2"
+  local application_hash="$3"
+  local cluster_id_hash="$4"
+
+  echo "$record" | jq -c -f "$SELFDIR/jq/transform-application.jq" \
+    --arg ns_hash "$ns_hash" \
+    --arg application_hash "$application_hash" \
+    --arg cluster_id_hash "$cluster_id_hash" \
+    --arg konflux_version "${KONFLUX_VERSION:-}" \
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}"
+}
+
 # Precompute cluster ID hash when Konflux info will be added (so we never send raw cluster ID)
 cluster_id_hash=""
 if [[ -n "${CLUSTER_ID:-}" ]]; then
@@ -198,6 +274,28 @@ while IFS= read -r record; do
     application_hash=$(hash_application_in_namespace "$application" "$ns")
     transform_component_record "$record" "$ns_hash" "$component_hash" \
       "$application_hash" "$cluster_id_hash"
+    continue
+  fi
+  if [[ "$kind" == "Application" ]]; then
+    ns=$(echo "$record" | jq -r '.metadata.namespace // "unknown"')
+    app_name=$(echo "$record" | jq -r '.metadata.name // "unknown"')
+    ns_hash=$(hash_namespace "$ns")
+    application_hash=$(hash_application_in_namespace "$app_name" "$ns")
+    transform_application_record "$record" "$ns_hash" "$application_hash" \
+      "$cluster_id_hash"
+    continue
+  fi
+  if [[ "$kind" == "Release" ]]; then
+    ns=$(echo "$record" | jq -r '.metadata.namespace // "unknown"')
+    rel_name=$(echo "$record" | jq -r '.metadata.name // "unknown"')
+    snapshot=$(echo "$record" | jq -r '.spec.snapshot // ""')
+    release_plan=$(echo "$record" | jq -r '.spec.releasePlan // ""')
+    ns_hash=$(hash_namespace "$ns")
+    release_hash=$(hash_release_identity "$rel_name" "$ns")
+    snapshot_hash=$(hash_snapshot_in_namespace "$snapshot" "$ns")
+    release_plan_hash=$(hash_release_plan_in_namespace "$release_plan" "$ns")
+    transform_release_record "$record" "$ns_hash" "$release_hash" \
+      "$snapshot_hash" "$release_plan_hash" "$cluster_id_hash"
     continue
   fi
   [[ "$kind" != "PipelineRun" ]] && continue

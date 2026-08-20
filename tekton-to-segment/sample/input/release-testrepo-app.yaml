@@ -1,0 +1,17 @@
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Release
+metadata:
+  creationTimestamp: "2026-03-03T11:00:00Z"
+  name: testrepo-release
+  namespace: default-tenant
+  uid: aabbccdd-1234-5678-9abc-ddeeff001122
+spec:
+  releasePlan: testrepo-release-plan
+  snapshot: testrepo-snapshot
+status:
+  completionTime: "2026-03-03T11:07:30Z"
+  conditions:
+    - lastTransitionTime: "2026-03-03T11:07:30Z"
+      reason: Succeeded
+      status: "True"
+      type: Released

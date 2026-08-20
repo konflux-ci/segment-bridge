@@ -24,16 +24,18 @@ const (
 
 // Basenames of scripts copied into the segment-bridge image (see Dockerfile).
 var bundledScriptBaseNames = map[string]struct{}{
-	"fetch-tekton-records.sh":     {},
-	"fetch-konflux-op-records.sh": {},
-	"fetch-namespace-records.sh":  {},
-	"fetch-component-records.sh":  {},
-	"get-konflux-public-info.sh":  {},
-	"tekton-to-segment.sh":        {},
-	"segment-uploader.sh":         {},
-	"segment-mass-uploader.sh":    {},
-	"mk-segment-batch-payload.sh": {},
-	"tekton-main-job.sh":          {},
+	"fetch-tekton-records.sh":      {},
+	"fetch-konflux-op-records.sh":  {},
+	"fetch-namespace-records.sh":   {},
+	"fetch-component-records.sh":   {},
+	"fetch-application-records.sh": {},
+	"fetch-release-records.sh":     {},
+	"get-konflux-public-info.sh":   {},
+	"tekton-to-segment.sh":         {},
+	"segment-uploader.sh":          {},
+	"segment-mass-uploader.sh":     {},
+	"mk-segment-batch-payload.sh":  {},
+	"tekton-main-job.sh":           {},
 }
 
 // WriteStub writes an executable shell script named name into dir with the

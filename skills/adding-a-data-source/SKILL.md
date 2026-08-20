@@ -32,7 +32,7 @@ Add the new script (e.g. `scripts/fetch-<resource>-records.sh`).
 
 - `set -o pipefail -o errexit -o nounset`
 - Shellcheck-clean; file header comment like the header block at the top of `scripts/fetch-component-records.sh`: purpose, NDJSON stdout, pipeline note if applicable, environment variables.
-- Resolve the client at runtime: prefer `oc`, else `kubectl`; error if neither — same kube client resolution pattern as in `scripts/fetch-component-records.sh`.
+- Resolve the client at runtime: honor `${KUBECTL:-}` env override first; prefer `kubectl`, else `oc`; error if neither — same pattern as `scripts/fetch-namespace-records.sh`. (`fetch-component-records.sh` pre-dates this convention and is the outlier.)
 - **Stdout:** NDJSON (one JSON object per line); no JSON array wrapper.
 - **Stderr:** diagnostics, warnings.
 - **Exit 0** when the data source is absent or not applicable (e.g. CRD not installed): warn on stderr, print nothing to stdout when that is correct so callers do not abort.
@@ -97,5 +97,5 @@ After all applicable steps:
 |--------|------|
 | **NDJSON** | One JSON object per line on stdout; no enclosing array. |
 | **Pipeline** | Fetches run under `set +e` in `tekton-main-job.sh`; stderr for errors; pipeline continues. |
-| **oc / kubectl** | Prefer `oc` if `command -v oc`, else `kubectl`; require one of them (see `fetch-component-records.sh`). |
+| **oc / kubectl** | Honor `${KUBECTL:-}` env override first; prefer `kubectl`, else `oc`; require one of them (see `fetch-namespace-records.sh`). `fetch-component-records.sh` pre-dates this convention. |
 | **Env vars** | Prefix matches the data source (e.g. `COMPONENT_RECENT_HOURS`, `COMPONENT_NOW_ISO`); document in the script header. |

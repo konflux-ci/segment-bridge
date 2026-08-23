@@ -60,11 +60,26 @@
           "required": ["userId", "rating", "feedback"]
         }
       ]
+    },
+    "ui_session_started_event": {
+      "x-event-name": "ui_session_started",
+      "description": "Fired once per browser tab on the first app load, regardless of auth state, to capture how the user arrived at Konflux UI",
+      "allOf": [
+        { "$ref": "#/$defs/CommonFields" },
+        {
+          "type": "object",
+          "properties": {
+            "arrivalSource": { "type": "string", "description": "Classification of document.referrer on first load, e.g. 'github' if the referrer host is github.com (or a subdomain)." }
+          },
+          "required": ["arrivalSource"]
+        }
+      ]
     }
   },
   "oneOf": [
     { "$ref": "#/$defs/user_login_event" },
     { "$ref": "#/$defs/user_logout_event" },
-    { "$ref": "#/$defs/feedback_submitted_event" }
+    { "$ref": "#/$defs/feedback_submitted_event" },
+    { "$ref": "#/$defs/ui_session_started_event" }
   ]
 }

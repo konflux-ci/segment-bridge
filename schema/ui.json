@@ -44,6 +44,41 @@
         }
       ]
     },
+    "JourneyStep": {
+      "type": "object",
+      "description": "A single step (page visit) within a user's navigation journey",
+      "properties": {
+        "path": { "type": "string", "description": "Route pattern of the page, e.g. /ns/:workspaceName/applications. Must be the route pattern, not the resolved URL — never include workspace/tenant names or other identifiers from the actual path." },
+        "title": { "type": "string", "description": "Page title or view name" },
+        "durationMs": { "type": "number", "description": "Time in milliseconds the user spent on this step" },
+        "toPath": { "type": "string", "description": "Route pattern the user navigated to after leaving this step. Absent on the last (still-open) step. Must be the route pattern, not the resolved URL." }
+      },
+      "required": ["path", "durationMs"],
+      "additionalProperties": false
+    },
+    "user_journey_event": {
+      "x-event-name": "user_journey",
+      "description": "Fired once per session, capturing the full navigation path and per-page dwell times",
+      "allOf": [
+        { "$ref": "#/$defs/CommonFields" },
+        {
+          "type": "object",
+          "properties": {
+            "userId": { "type": "string", "description": "Unique identifier of the user", "x-pia": true, "x-obfuscation": "sha256", "x-obfuscation-salt": "clusterId", "tsType": "SHA256Hash" },
+            "sessionStartedAt": { "type": "string", "format": "date-time", "description": "ISO-8601 timestamp of when the session started" },
+            "totalDurationMs": { "type": "number", "description": "Total duration of the session in milliseconds" },
+            "steps": {
+              "type": "array",
+              "description": "Ordered list of steps (page visits) taken during the session",
+              "items": { "$ref": "#/$defs/JourneyStep" }
+            },
+            "journeyId": { "type": "string", "description": "Stable identifier linking all parts of a split journey. Only present when auto-split fires (payload exceeded size threshold)." },
+            "journeyPartIndex": { "type": "number", "description": "Zero-based index of this part within a split journey. Only present when auto-split fires." }
+          },
+          "required": ["userId", "sessionStartedAt", "totalDurationMs", "steps"]
+        }
+      ]
+    },
     "feedback_submitted_event": {
       "x-event-name": "feedback_submitted",
       "description": "Fired when a user submits feedback through the Konflux UI",
@@ -60,54 +95,12 @@
           "required": ["userId", "rating", "feedback"]
         }
       ]
-    },
-    "ui_session_started_event": {
-      "x-event-name": "ui_session_started",
-      "description": "Fired once per browser tab on the first app load, regardless of auth state, to capture how the user arrived at Konflux UI",
-      "allOf": [
-        { "$ref": "#/$defs/CommonFields" },
-        {
-          "type": "object",
-          "properties": {
-            "arrivalSource": { "type": "string", "description": "Classification of document.referrer on first load, e.g. 'github' if the referrer host is github.com (or a subdomain)." }
-          },
-          "required": ["arrivalSource"]
-        }
-      ]
-    },
-    "feature_flags_changed_event": {
-      "x-event-name": "feature_flags_changed",
-      "description": "Fired every time the Feature Flag Panel modal is closed. Contains only the flags whose effective state changed between panel open and panel close. changesCount may be 0 when user opened the panel but did not change anything (tracks panel awareness).",
-      "allOf": [
-        { "$ref": "#/$defs/CommonFields" },
-        {
-          "type": "object",
-          "properties": {
-            "changes": {
-              "type": "object",
-              "additionalProperties": { "type": "boolean" },
-              "description": "Map of changed flag keys to their new boolean value. Empty object if no flags were changed."
-            },
-            "changesCount": {
-              "type": "integer",
-              "minimum": 0,
-              "description": "Number of flags that changed. 0 means the user opened the panel but did not change anything."
-            },
-            "pagePath": {
-              "type": "string",
-              "description": "URL pathname when the panel was opened (e.g. /ns/my-ns/applications)"
-            }
-          },
-          "required": ["changes", "changesCount", "pagePath"]
-        }
-      ]
     }
   },
   "oneOf": [
     { "$ref": "#/$defs/user_login_event" },
     { "$ref": "#/$defs/user_logout_event" },
     { "$ref": "#/$defs/feedback_submitted_event" },
-    { "$ref": "#/$defs/ui_session_started_event" },
-    { "$ref": "#/$defs/feature_flags_changed_event" }
+    { "$ref": "#/$defs/user_journey_event" }
   ]
 }

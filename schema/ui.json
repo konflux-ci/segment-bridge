@@ -74,12 +74,40 @@
           "required": ["arrivalSource"]
         }
       ]
+    },
+    "feature_flags_changed_event": {
+      "x-event-name": "feature_flags_changed",
+      "description": "Fired every time the Feature Flag Panel modal is closed. Contains only the flags whose effective state changed between panel open and panel close. changesCount may be 0 when user opened the panel but did not change anything (tracks panel awareness).",
+      "allOf": [
+        { "$ref": "#/$defs/CommonFields" },
+        {
+          "type": "object",
+          "properties": {
+            "changes": {
+              "type": "object",
+              "additionalProperties": { "type": "boolean" },
+              "description": "Map of changed flag keys to their new boolean value. Empty object if no flags were changed."
+            },
+            "changesCount": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of flags that changed. 0 means the user opened the panel but did not change anything."
+            },
+            "pagePath": {
+              "type": "string",
+              "description": "URL pathname when the panel was opened (e.g. /ns/my-ns/applications)"
+            }
+          },
+          "required": ["changes", "changesCount", "pagePath"]
+        }
+      ]
     }
   },
   "oneOf": [
     { "$ref": "#/$defs/user_login_event" },
     { "$ref": "#/$defs/user_logout_event" },
     { "$ref": "#/$defs/feedback_submitted_event" },
-    { "$ref": "#/$defs/ui_session_started_event" }
+    { "$ref": "#/$defs/ui_session_started_event" },
+    { "$ref": "#/$defs/feature_flags_changed_event" }
   ]
 }

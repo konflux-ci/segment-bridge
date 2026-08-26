@@ -1,0 +1,19 @@
+anonymousId: anonymous
+context:
+  library:
+    name: segment-bridge
+    version: 2.0.0
+  device:
+    id: f069097ced1b
+event: Release Created
+messageId: aabbccdd-1234-5678-9abc-ddeeff001122-release-created
+properties:
+  clusterIdHash: f069097ced1b
+  konfluxVersion: "1.2.3"
+  kubernetesVersion: "1.30"
+  namespaceHash: 01618a158dc1
+  releaseHash: 0fdd47a873fd
+  releasePlanHash: 18db2cc597c6
+  snapshotHash: e7e24e92128c
+timestamp: "2026-03-03T11:00:00Z"
+type: track

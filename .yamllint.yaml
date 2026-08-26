@@ -15,3 +15,4 @@ ignore:
   - fetch-namespace-records/testdata/
   - fetch-component-records/testdata/
   - fetch-application-records/testdata/
+  - fetch-release-records/testdata/

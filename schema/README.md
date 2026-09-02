@@ -25,16 +25,14 @@ oneOf              — references all event defs (enables full type generation i
 | Extension | Purpose | Example |
 |-----------|---------|---------|
 | `x-event-name` | The event name string passed to Segment `track()` | `"user_login"` |
-| `x-pia` | Marks a field as containing personally identifiable attributes | `true` |
-| `x-obfuscation` | Required obfuscation method for PIA fields | `"sha256"` |
-| `x-obfuscation-salt` | Field whose value is appended (as `value:salt`) before hashing, ensuring uniqueness across clusters | `"clusterId"` |
-| `tsType` | TypeScript type override used by `json-schema-to-typescript` | `"SHA256Hash"` |
 
-### PIA Fields
+### Privacy
 
-Fields marked with `"x-pia": true` contain personally identifiable attributes and **must be obfuscated before sending to Segment**. The `x-obfuscation` field specifies the method — currently only `"sha256"` is supported. The `tsType` extension enforces this at build time by emitting a branded type (e.g. `SHA256Hash`) that prevents raw strings from being passed.
-
-When `x-obfuscation-salt` is present, the referenced field's value (e.g. `clusterId`) **must be appended** to the raw value with a `:` separator before hashing: `sha256(value:clusterId)`. This ensures that values like user IDs or namespaces, which may not be unique across clusters, produce distinct hashes per cluster. If the salt field is not available, the value is hashed without it: `sha256(value)`.
+New telemetry events must not introduce personally identifiable information
+(PII). Use anonymous, session-scoped identifiers and route patterns rather than
+user identifiers, stable installation identifiers, resolved URLs, or resource
+names. Do not use schema extensions or obfuscation as a way to permit PII in
+telemetry.
 
 ## Adding a New Event
 
@@ -66,17 +64,4 @@ When `x-obfuscation-salt` is present, the referenced field's value (e.g. `cluste
 ]
 ```
 
-3. For PIA fields that need obfuscation, add all three markers:
-
-```json
-"userId": {
-  "type": "string",
-  "description": "...",
-  "x-pia": true,
-  "x-obfuscation": "sha256",
-  "x-obfuscation-salt": "clusterId",
-  "tsType": "SHA256Hash"
-}
-```
-
-4. In downstream consumers (e.g. `konflux-ui`), regenerate types from the updated schema.
+3. In downstream consumers (e.g. `konflux-ui`), regenerate types from the updated schema.

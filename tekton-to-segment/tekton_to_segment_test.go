@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/redhat-appstudio/segment-bridge.git/containerfixture"
+	"github.com/redhat-appstudio/segment-bridge.git/kwok"
 	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,20 +21,21 @@ const (
 )
 
 func TestTektonToSegment(t *testing.T) {
-	require.NoError(t, os.Setenv("CLUSTER_ID", clusterIDEnv), "Failed to set CLUSTER_ID")
-	require.NoError(t, os.Setenv("KONFLUX_VERSION", "1.2.3"), "Failed to set KONFLUX_VERSION")
-	require.NoError(t, os.Setenv("KUBERNETES_VERSION", "1.30"), "Failed to set KUBERNETES_VERSION")
-	require.NoError(t, os.Setenv("HEARTBEAT_TIMESTAMP", "2026-03-04T08:00:00Z"), "Failed to set HEARTBEAT_TIMESTAMP")
+	t.Setenv("CLUSTER_ID", clusterIDEnv)
+	t.Setenv("KONFLUX_VERSION", "1.2.3")
+	t.Setenv("KUBERNETES_VERSION", "1.30")
+	t.Setenv("HEARTBEAT_TIMESTAMP", "2026-03-04T08:00:00Z")
+	t.Setenv("EMIT_HEARTBEAT", "")
 
 	expectedBytes, err := os.ReadFile(expectedPath)
 	require.NoError(t, err, "Failed to read expected output file")
-	expectedLines := trimNonEmptyLines(string(expectedBytes))
+	expectedLines := testfixture.TrimNonEmptyLines(string(expectedBytes))
 	require.NotEmpty(t, expectedLines, "Expected output must not be empty")
 
 	output, err := testfixture.RunScriptWithInputFile(inputPath, scriptPath)
 	require.NoError(t, err, "Script execution failed")
 
-	actualLines := trimNonEmptyLines(string(output))
+	actualLines := testfixture.TrimNonEmptyLines(string(output))
 	assert.Equal(t, len(expectedLines), len(actualLines),
 		"Output line count mismatch: expected %d, got %d", len(expectedLines), len(actualLines))
 
@@ -87,11 +90,12 @@ func TestTektonToSegment_EmptyLines(t *testing.T) {
 	t.Setenv("HEARTBEAT_TIMESTAMP", "2026-03-04T08:00:00Z")
 	t.Setenv("KONFLUX_VERSION", "")
 	t.Setenv("KUBERNETES_VERSION", "")
+	t.Setenv("EMIT_HEARTBEAT", "")
 
 	output, err := testfixture.RunScriptWithInputFile("testdata/blank-lines.ndjson", scriptPath)
 	require.NoError(t, err, "script must exit 0 when input contains only blank lines")
 
-	lines := trimNonEmptyLines(string(output))
+	lines := testfixture.TrimNonEmptyLines(string(output))
 	require.Len(t, lines, 1, "expected exactly one output line (heartbeat only)")
 
 	var event map[string]interface{}
@@ -99,14 +103,115 @@ func TestTektonToSegment_EmptyLines(t *testing.T) {
 	assert.Equal(t, "Segment Bridge Heartbeat", event["event"])
 }
 
-// trimNonEmptyLines splits on newlines and returns non-empty trimmed lines.
-func trimNonEmptyLines(s string) []string {
-	var lines []string
-	for _, line := range strings.Split(s, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" {
-			lines = append(lines, trimmed)
-		}
+func runToSegmentWithStderr(t *testing.T, inputPath string, env []string) (stdout, stderr string, err error) {
+	t.Helper()
+	f, err := os.Open(inputPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = f.Close() })
+	out, errb, runErr := testfixture.RunRepoScriptWithStderr(scriptPath, f, env)
+	return string(out), string(errb), runErr
+}
+
+func withKwokCluster(t *testing.T, fn func(t *testing.T)) {
+	t.Helper()
+	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
+		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
+		fn(t)
+	})
+}
+
+// emitHeartbeatToggleVars must not leak from the host into toggle subtests.
+var emitHeartbeatToggleVars = []string{"EMIT_HEARTBEAT"}
+
+func environForEmitHeartbeatToggle(extra ...string) []string {
+	drop := make(map[string]struct{}, len(emitHeartbeatToggleVars))
+	for _, k := range emitHeartbeatToggleVars {
+		drop[k] = struct{}{}
 	}
-	return lines
+	env := os.Environ()
+	out := make([]string, 0, len(env)+len(extra))
+	for _, e := range env {
+		key, _, ok := strings.Cut(e, "=")
+		if !ok {
+			continue
+		}
+		if _, skip := drop[key]; skip {
+			continue
+		}
+		out = append(out, e)
+	}
+	return append(out, extra...)
+}
+
+func TestEmitHeartbeatToggle(t *testing.T) {
+	withKwokCluster(t, func(t *testing.T) {
+		runEmitHeartbeatToggle(t)
+	})
+}
+
+func runEmitHeartbeatToggle(t *testing.T) {
+	t.Helper()
+	const blankInput = "testdata/blank-lines.ndjson"
+
+	tests := []struct {
+		name          string
+		emitHeartbeat string
+		wantHeartbeat bool
+		wantStderr    []string
+	}{
+		{
+			name:          "default enabled",
+			wantHeartbeat: true,
+			wantStderr:    []string{"Effective telemetry toggles: EMIT_HEARTBEAT=true"},
+		},
+		{
+			name:          "heartbeat off",
+			emitHeartbeat: "false",
+			wantHeartbeat: false,
+			wantStderr:    []string{"Effective telemetry toggles: EMIT_HEARTBEAT=false"},
+		},
+		{
+			name:          "case-insensitive false",
+			emitHeartbeat: "FALSE",
+			wantHeartbeat: false,
+			wantStderr:    []string{"Effective telemetry toggles: EMIT_HEARTBEAT=false"},
+		},
+		{
+			name:          "invalid value fail-open",
+			emitHeartbeat: "nope",
+			wantHeartbeat: true,
+			wantStderr: []string{
+				"WARNING: unrecognized value 'nope' for EMIT_HEARTBEAT; treating as enabled (use false to disable)",
+				"Effective telemetry toggles: EMIT_HEARTBEAT=true",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			env := environForEmitHeartbeatToggle(
+				"CLUSTER_ID=test-cluster",
+				"HEARTBEAT_TIMESTAMP=2026-03-04T08:00:00Z",
+				"KONFLUX_VERSION=",
+				"KUBERNETES_VERSION=",
+				"EMIT_HEARTBEAT="+tc.emitHeartbeat,
+			)
+
+			stdout, stderr, err := runToSegmentWithStderr(t, blankInput, env)
+			require.NoError(t, err, "script must exit 0; stderr:\n%s", stderr)
+
+			lines := testfixture.TrimNonEmptyLines(stdout)
+			if tc.wantHeartbeat {
+				require.Len(t, lines, 1, "expected exactly one output line (heartbeat)")
+				var event map[string]interface{}
+				require.NoError(t, json.Unmarshal([]byte(lines[0]), &event))
+				assert.Equal(t, "Segment Bridge Heartbeat", event["event"])
+			} else {
+				assert.Empty(t, lines, "heartbeat must not be emitted")
+			}
+			for _, want := range tc.wantStderr {
+				assert.Contains(t, stderr, want)
+			}
+		})
+	}
 }

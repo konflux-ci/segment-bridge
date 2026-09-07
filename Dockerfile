@@ -70,6 +70,7 @@ COPY --chown=root:root --chmod=755 \
     /usr/local/bin/
 
 COPY --chown=root:root --chmod=644 scripts/jq/ /usr/local/bin/jq/
+COPY --chown=root:root --chmod=644 scripts/lib/toggle.sh /usr/local/bin/lib/toggle.sh
 
 COPY --chown=root:root --chmod=644 LICENSE /licenses/LICENSE
 

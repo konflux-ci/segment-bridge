@@ -28,11 +28,19 @@ oneOf              — references all event defs (enables full type generation i
 
 ### Privacy
 
-New telemetry events must not introduce personally identifiable information
-(PII). Use anonymous, session-scoped identifiers and route patterns rather than
-user identifiers, stable installation identifiers, resolved URLs, or resource
-names. Do not use schema extensions or obfuscation as a way to permit PII in
-telemetry.
+New telemetry events must not include raw personally identifiable information
+(PII). Authenticated UI events may include `userId` only as a narrowly defined,
+cluster-scoped pseudonymous identifier: the UI hashes the authenticated user
+identifier with the local cluster identifier as a salt before sending the
+payload to Segment. The raw user identifier and raw cluster identifier must
+never be serialized in an event payload.
+
+Hashing makes `userId` pseudonymous, not anonymous. It remains linkable across
+sessions for the same user on the same cluster and therefore requires the
+corresponding privacy review, access controls, and retention classification.
+Use `sessionId` for short-lived per-tab correlation, and use route patterns
+rather than resolved URLs, resource names, or other identifiers from actual
+paths. Do not restore `clusterId` as a transmitted common event property.
 
 ## Adding a New Event
 

@@ -32,6 +32,10 @@ set -o pipefail -o errexit -o nounset
 
 SELFDIR="$(cd "$(dirname "$0")" && pwd)"
 
+# lib/ is not symlinked in tests; resolve the real script path to find it.
+# shellcheck source-path=SCRIPTDIR
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/toggle.sh"
+
 # ======= Parameters ======
 # The following variables can be set from outside the script by setting
 # similarly named environment variables.
@@ -50,6 +54,11 @@ CLUSTER_ID="${CLUSTER_ID:-anonymous}"
 # missing or not accessible.
 # KONFLUX_VERSION="${KONFLUX_VERSION:-}"
 # KUBERNETES_VERSION="${KUBERNETES_VERSION:-}"
+#
+# Emit a Segment Bridge Heartbeat at the end of the transform. Only the
+# literal value "false" (case-insensitive) disables it; any other value
+# fails open. Default: enabled.
+# EMIT_HEARTBEAT="${EMIT_HEARTBEAT:-true}"
 #
 # === End of parameters ===
 
@@ -237,6 +246,9 @@ transform_application_record() {
     --arg kubernetes_version "${KUBERNETES_VERSION:-}"
 }
 
+_emit_heartbeat=$(resolve_toggle EMIT_HEARTBEAT)
+echo "Effective telemetry toggles: EMIT_HEARTBEAT=${_emit_heartbeat}" >&2
+
 # Precompute cluster ID hash when Konflux info will be added (so we never send raw cluster ID)
 cluster_id_hash=""
 if [[ -n "${CLUSTER_ID:-}" ]]; then
@@ -310,9 +322,11 @@ done
 
 # Emit a heartbeat event so Segment can tell this cluster is alive and
 # segment-bridge is running, even when no real records were processed.
-heartbeat_ts="${HEARTBEAT_TIMESTAMP:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
-jq -n -c -f "$SELFDIR/jq/heartbeat.jq" \
-  --arg cluster_id_hash "$cluster_id_hash" \
-  --arg timestamp "$heartbeat_ts" \
-  --arg konflux_version "${KONFLUX_VERSION:-}" \
-  --arg kubernetes_version "${KUBERNETES_VERSION:-}"
+if [[ "${_emit_heartbeat}" == true ]]; then
+  heartbeat_ts="${HEARTBEAT_TIMESTAMP:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+  jq -n -c -f "$SELFDIR/jq/heartbeat.jq" \
+    --arg cluster_id_hash "$cluster_id_hash" \
+    --arg timestamp "$heartbeat_ts" \
+    --arg konflux_version "${KONFLUX_VERSION:-}" \
+    --arg kubernetes_version "${KUBERNETES_VERSION:-}"
+fi

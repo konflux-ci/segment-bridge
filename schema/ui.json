@@ -22,7 +22,17 @@
         { "$ref": "#/$defs/CommonFields" },
         {
           "type": "object",
-          "required": []
+          "properties": {
+            "userId": {
+              "type": "string",
+              "description": "Unique identifier of the user",
+              "x-pia": true,
+              "x-obfuscation": "sha256",
+              "x-obfuscation-salt": "clusterId",
+              "tsType": "SHA256Hash"
+            }
+          },
+          "required": ["userId"]
         }
       ]
     },
@@ -33,7 +43,17 @@
         { "$ref": "#/$defs/CommonFields" },
         {
           "type": "object",
-          "required": []
+          "properties": {
+            "userId": {
+              "type": "string",
+              "description": "Unique identifier of the user",
+              "x-pia": true,
+              "x-obfuscation": "sha256",
+              "x-obfuscation-salt": "clusterId",
+              "tsType": "SHA256Hash"
+            }
+          },
+          "required": ["userId"]
         }
       ]
     },
@@ -57,6 +77,14 @@
         {
           "type": "object",
           "properties": {
+            "userId": {
+              "type": "string",
+              "description": "Unique identifier of the user",
+              "x-pia": true,
+              "x-obfuscation": "sha256",
+              "x-obfuscation-salt": "clusterId",
+              "tsType": "SHA256Hash"
+            },
             "sessionStartedAt": { "type": "string", "format": "date-time", "description": "ISO-8601 timestamp of when the session started" },
             "totalDurationMs": { "type": "number", "minimum": 0, "description": "Duration of this journey part in milliseconds. For auto-split journeys, each part reports the duration of its own session segment rather than the full journey." },
             "steps": {
@@ -72,7 +100,7 @@
             "journeyId": ["journeyPartIndex"],
             "journeyPartIndex": ["journeyId"]
           },
-          "required": ["sessionStartedAt", "totalDurationMs", "steps"]
+          "required": ["userId", "sessionStartedAt", "totalDurationMs", "steps"]
         }
       ]
     },
@@ -84,11 +112,12 @@
         {
           "type": "object",
           "properties": {
+            "userId":  { "type": "string", "description": "Unique identifier of the user", "x-pia": true, "x-obfuscation": "sha256", "x-obfuscation-salt": "clusterId", "tsType": "SHA256Hash" },
             "rating":   { "type": "number", "description": "User satisfaction rating, typically on a 1-5 scale" },
             "feedback": { "type": "string", "description": "Free-text feedback provided by the user" },
             "email":    { "type": "string", "description": "Optional contact email provided by the user for follow-up" }
           },
-          "required": ["rating", "feedback"]
+          "required": ["userId", "rating", "feedback"]
         }
       ]
     },
@@ -100,9 +129,17 @@
         {
           "type": "object",
           "properties": {
+            "userId": {
+              "type": "string",
+              "description": "Unique identifier of the user",
+              "x-pia": true,
+              "x-obfuscation": "sha256",
+              "x-obfuscation-salt": "clusterId",
+              "tsType": "SHA256Hash"
+            },
             "arrivalSource": { "type": "string", "description": "Classification of document.referrer on first load, e.g. 'github' if the referrer host is github.com (or a subdomain)." }
           },
-          "required": ["arrivalSource"]
+          "required": ["userId", "arrivalSource"]
         }
       ]
     },
@@ -114,6 +151,14 @@
         {
           "type": "object",
           "properties": {
+            "userId": {
+              "type": "string",
+              "description": "Unique identifier of the user",
+              "x-pia": true,
+              "x-obfuscation": "sha256",
+              "x-obfuscation-salt": "clusterId",
+              "tsType": "SHA256Hash"
+            },
             "changes": {
               "type": "object",
               "additionalProperties": { "type": "boolean" },
@@ -129,7 +174,7 @@
               "description": "Route pattern when the panel was opened (e.g. /ns/:workspaceName/applications), never the resolved URL"
             }
           },
-          "required": ["changes", "changesCount", "pagePattern"]
+          "required": ["userId", "changes", "changesCount", "pagePattern"]
         }
       ]
     }

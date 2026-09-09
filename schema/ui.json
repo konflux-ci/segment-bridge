@@ -177,6 +177,27 @@
           "required": ["userId", "changes", "changesCount", "pagePattern"]
         }
       ]
+    },
+    "conforma_violations_link_clicked_event": {
+      "x-event-name": "conforma_violations_link_clicked",
+      "description": "Fired when a user clicks an application link in the Conforma policy results card on the Issues Dashboard, navigating to that application's Conforma results tab",
+      "allOf": [
+        { "$ref": "#/$defs/CommonFields" },
+        {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string",
+              "description": "Unique identifier of the user",
+              "x-pia": true,
+              "x-obfuscation": "sha256",
+              "x-obfuscation-salt": "clusterId",
+              "tsType": "SHA256Hash"
+            }
+          },
+          "required": ["userId"]
+        }
+      ]
     }
   },
   "oneOf": [
@@ -185,6 +206,7 @@
     { "$ref": "#/$defs/feedback_submitted_event" },
     { "$ref": "#/$defs/ui_session_started_event" },
     { "$ref": "#/$defs/feature_flags_changed_event" },
-    { "$ref": "#/$defs/user_journey_event" }
+    { "$ref": "#/$defs/user_journey_event" },
+    { "$ref": "#/$defs/conforma_violations_link_clicked_event" }
   ]
 }

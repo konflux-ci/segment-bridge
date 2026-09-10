@@ -198,6 +198,27 @@
           "required": ["userId"]
         }
       ]
+    },
+    "integration_test_rerun_triggered_event": {
+      "x-event-name": "integration_test_rerun_triggered",
+      "description": "Fired when a user clicks the Rerun button for an integration test pipeline in the Activity / PipelineRuns list.",
+      "allOf": [
+        { "$ref": "#/$defs/CommonFields" },
+        {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string",
+              "description": "Unique identifier of the user",
+              "x-pia": true,
+              "x-obfuscation": "sha256",
+              "x-obfuscation-salt": "clusterId",
+              "tsType": "SHA256Hash"
+            }
+          },
+          "required": ["userId"]
+        }
+      ]
     }
   },
   "oneOf": [
@@ -207,6 +228,7 @@
     { "$ref": "#/$defs/ui_session_started_event" },
     { "$ref": "#/$defs/feature_flags_changed_event" },
     { "$ref": "#/$defs/user_journey_event" },
-    { "$ref": "#/$defs/conforma_violations_link_clicked_event" }
+    { "$ref": "#/$defs/conforma_violations_link_clicked_event" },
+    { "$ref": "#/$defs/integration_test_rerun_triggered_event" }
   ]
 }

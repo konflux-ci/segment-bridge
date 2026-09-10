@@ -52,6 +52,7 @@ yamllint path/to/file.yaml
 |------|---------|
 | `scripts/` | Shell scripts: fetch, transform, upload pipeline |
 | `scripts/jq/` | jq transforms mapping NDJSON to Segment events |
+| `scripts/lib/` | Shared shell library helpers sourced by pipeline scripts |
 | `segment/`, `tekton-to-segment/`, … | Go test package per script (one dir mirrors one `scripts/*.sh`) |
 | `tekton-e2e/` | End-to-end tests (build tag `e2e`) |
 | `*fixture/` | Go test helpers (container runtime, kwok clusters, HTTP mocks) |
@@ -145,6 +146,13 @@ Default branch is `main`; open PRs against `main`.
 | `SEGMENT_WRITE_KEY` | *(none)* | `tekton-main-job.sh` — generates `.netrc` |
 | `CLUSTER_ID` | `anonymous` | `tekton-to-segment.sh` — namespace hashing |
 | `KUBECTL` | auto-detect | All `fetch-*.sh` / `get-konflux-public-info.sh` |
+| `FETCH_PIPELINERUNS` | `true` | `tekton-main-job.sh` — PipelineRun fetch |
+| `FETCH_OPERATOR` | `true` | `tekton-main-job.sh` — operator CR fetch |
+| `FETCH_NAMESPACES` | `true` | `tekton-main-job.sh` — namespace fetch |
+| `FETCH_COMPONENTS` | `true` | `tekton-main-job.sh` — component fetch |
+| `FETCH_APPLICATIONS` | `true` | `tekton-main-job.sh` — application fetch |
+| `FETCH_RELEASES` | `true` | `tekton-main-job.sh` — release fetch |
+| `EMIT_HEARTBEAT` | `true` | `tekton-to-segment.sh` — Segment Bridge Heartbeat |
 | `NAMESPACE_RECENT_HOURS` | `4` | `fetch-namespace-records.sh` |
 | `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` |
 | `APPLICATION_RECENT_HOURS` | `4` | `fetch-application-records.sh` |
@@ -159,6 +167,9 @@ Default branch is `main`; open PRs against `main`.
 | `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` |
 | `SEGMENT_BRIDGE_TEST_IMAGE` | *(none)* | Go tests |
 | `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME` | auto (`podman`→`docker`) | Go tests |
+
+Only the literal value `false` (case-insensitive) disables a `FETCH_*` or
+`EMIT_HEARTBEAT` toggle. Unrecognized values fail open with a stderr warning.
 
 ## Toolchain
 

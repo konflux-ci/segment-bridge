@@ -73,7 +73,21 @@ If fixture YAML has long lines or non-standard formatting, append the fixture pa
 
 ### C. Tekton main job
 
-`scripts/tekton-main-job.sh` — inside the brace group that already uses `set +e`, append a call to the new script before `true; }`. Fetches are **best-effort**: failures must not stop other fetches or the pipe into `get-konflux-public-info.sh`.
+`scripts/tekton-main-job.sh` — add a per-source toggle and a best-effort fetch call:
+
+1. Resolve the toggle next to the existing `resolve_toggle` calls:
+   `_fetch_<name>=$(resolve_toggle FETCH_<NAME>)`
+2. Append `FETCH_<NAME>=${_fetch_<name>}` to the
+   `echo "Effective telemetry toggles: ..."` log line.
+3. Inside the brace group that already uses `set +e`, before `true; }`, add:
+   `if [[ "${_fetch_<name>}" == true ]]; then fetch-<resource>-records.sh; fi`
+4. Document `FETCH_<NAME>` (default `true`) in `AGENTS.md` and `README.md`.
+   Only the literal value `false` (case-insensitive) disables a source.
+5. Append `FETCH_<NAME>` to the `telemetryToggleVars` slice in
+   `tekton-main-job/tekton_main_job_test.go` so host env vars do not leak
+   into script tests.
+
+Fetches are **best-effort**: failures must not stop other fetches or the pipe into `get-konflux-public-info.sh`.
 
 ### D. README diagram
 

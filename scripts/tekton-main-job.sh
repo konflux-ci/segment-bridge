@@ -34,13 +34,17 @@ PATH="$SELFDIR:${PATH#"$SELFDIR":}"
 # Generate a temporary .netrc file from SEGMENT_WRITE_KEY if provided.
 # The segment-uploader.sh script uses CURL_NETRC for authentication, so we
 # convert the write key into .netrc format here.
+set +o xtrace
 if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
+  segment_write_key="$SEGMENT_WRITE_KEY"
+  unset SEGMENT_WRITE_KEY
   TMPNETRC=$(mktemp)
   trap 'rm -f "$TMPNETRC"' EXIT
   # Extract hostname from SEGMENT_BATCH_API for the .netrc machine field
   SEGMENT_HOST=$(echo "${SEGMENT_BATCH_API:-https://api.segment.io/v1/batch}" | sed -E 's|https?://([^/]+).*|\1|')
   # Segment uses HTTP Basic Auth: write key as login, empty password
-  printf 'machine %s login %s password ""\n' "$SEGMENT_HOST" "$SEGMENT_WRITE_KEY" > "$TMPNETRC"
+  printf 'machine %s login %s password ""\n' "$SEGMENT_HOST" "$segment_write_key" > "$TMPNETRC"
+  unset segment_write_key
   chmod 600 "$TMPNETRC"
   export CURL_NETRC="$TMPNETRC"
   segment_sink() { segment-mass-uploader.sh; }
@@ -48,6 +52,7 @@ else
   echo "No SEGMENT_WRITE_KEY configured; skipping upload to Segment" >&2
   segment_sink() { cat > /dev/null; }
 fi
+set -o xtrace
 
 # Fetch sources are best-effort: a failing data source must not prevent the
 # remaining sources from running or abort the pipeline.  The brace group runs

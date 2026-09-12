@@ -13,7 +13,10 @@ spec:
       template:
         spec:
           containers:
-            - envFrom:
+            - env:
+                - name: TEKTON_RESULTS_CA_PATH
+                  value: /var/run/segment-bridge/tekton-results-ca/service-ca.crt
+              envFrom:
                 - secretRef:
                     name: segment-bridge-config
                     optional: true
@@ -36,6 +39,9 @@ spec:
               volumeMounts:
                 - name: tmp
                   mountPath: /tmp
+                - mountPath: /var/run/segment-bridge/tekton-results-ca
+                  name: tekton-results-service-ca
+                  readOnly: true
           restartPolicy: OnFailure
           securityContext:
             runAsNonRoot: true
@@ -45,4 +51,10 @@ spec:
           volumes:
             - name: tmp
               emptyDir: {}
+            - configMap:
+                items:
+                  - key: service-ca.crt
+                    path: service-ca.crt
+                name: segment-bridge-tekton-results-service-ca
+              name: tekton-results-service-ca
   schedule: 0 * * * *

@@ -102,6 +102,13 @@ podman run --rm \
   -e TEKTON_RESULTS_TOKEN="$(kubectl create token default -n default)" \
   -e SEGMENT_WRITE_KEY=your-write-key \
   segment-bridge
+
+# With a custom CA for the Results API, mount the PEM bundle and set TEKTON_RESULTS_CA_PATH:
+podman run --rm \
+  -v /path/to/results-ca.pem:/etc/ssl/certs/results-ca.pem:ro \
+  -e TEKTON_RESULTS_CA_PATH=/etc/ssl/certs/results-ca.pem \
+  ... \
+  segment-bridge
 ```
 
 Fetch uses the Tekton Results HTTP REST API (not the `tkn-results` gRPC
@@ -116,6 +123,8 @@ See the [`Dockerfile`](Dockerfile) header for additional usage examples.
 |----------|---------|---------|-------------|
 | `TEKTON_RESULTS_API_ADDR` | `https://localhost:8443` | `fetch-tekton-records.sh` | Tekton Results HTTP REST API base URL (include `http://` or `https://`) |
 | `TEKTON_RESULTS_TOKEN` | *(empty)* | `fetch-tekton-records.sh` | Bearer token for the Results API; when unset, read from `SA_TOKEN_PATH` |
+| `TEKTON_RESULTS_CA_PATH` | *(empty)* | `fetch-tekton-records.sh` | Optional PEM CA bundle for only the Tekton Results HTTPS request; empty uses the image trust store |
+| `TEKTON_RESULTS_INSECURE` | `false` | `fetch-tekton-records.sh` | When `true`, disables Results certificate verification and logs a warning; emergency compatibility use only |
 | `SA_TOKEN_PATH` | `/var/run/secrets/kubernetes.io/serviceaccount/token` | `fetch-tekton-records.sh` | Service account token file used when `TEKTON_RESULTS_TOKEN` is unset |
 | `TEKTON_NAMESPACE` | `-` (all namespaces) | `fetch-tekton-records.sh` | Namespace passed to the Results API parent path |
 | `TEKTON_LIMIT` | `100` | `fetch-tekton-records.sh` | Maximum PipelineRun records fetched per API page |

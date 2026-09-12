@@ -69,6 +69,20 @@ TEKTON_CURSOR_CONFIGMAP="${TEKTON_CURSOR_CONFIGMAP:-segment-bridge-cursor}"
 # Namespace of the cursor ConfigMap.
 TEKTON_CURSOR_NAMESPACE="${TEKTON_CURSOR_NAMESPACE:-segment-bridge}"
 #
+# Optional PEM CA bundle used only for Tekton Results server verification.
+# When empty, curl uses the image's normal CA trust store.
+TEKTON_RESULTS_CA_PATH="${TEKTON_RESULTS_CA_PATH:-}"
+#
+# Emergency compatibility switch. TLS verification remains on by default.
+TEKTON_RESULTS_INSECURE="${TEKTON_RESULTS_INSECURE:-false}"
+case "$TEKTON_RESULTS_INSECURE" in
+  true | false) ;;
+  *)
+    echo "ERROR fetch-tekton-records.sh: TEKTON_RESULTS_INSECURE must be 'true' or 'false', got '${TEKTON_RESULTS_INSECURE}'" >&2
+    exit 1
+    ;;
+esac
+#
 # === End of parameters ===
 
 # Detect kubectl/oc for cursor ConfigMap access (optional).
@@ -174,6 +188,19 @@ if [[ "$API_BASE" != http://* ]] && [[ "$API_BASE" != https://* ]]; then
   API_BASE="https://${API_BASE}"
 fi
 
+# Build request-local curl TLS argument array.
+CURL_TLS_ARGS=()
+if [[ "$TEKTON_RESULTS_INSECURE" == "true" ]]; then
+  echo "WARNING: TEKTON_RESULTS_INSECURE=true disables TLS certificate verification for Tekton Results" >&2
+  CURL_TLS_ARGS+=(--insecure)
+elif [[ -n "$TEKTON_RESULTS_CA_PATH" ]]; then
+  if [[ ! -r "$TEKTON_RESULTS_CA_PATH" ]] || [[ ! -f "$TEKTON_RESULTS_CA_PATH" ]]; then
+    echo "ERROR fetch-tekton-records.sh: TEKTON_RESULTS_CA_PATH is not a readable file: ${TEKTON_RESULTS_CA_PATH}" >&2
+    exit 1
+  fi
+  CURL_TLS_ARGS+=(--cacert "$TEKTON_RESULTS_CA_PATH")
+fi
+
 RECORDS_URL="${API_BASE}/apis/results.tekton.dev/v1alpha2/parents/${TEKTON_NAMESPACE}/results/-/records"
 
 CURSOR=$(read_cursor)
@@ -200,7 +227,7 @@ while true; do
     URL="${URL}&page_token=${PAGE_TOKEN_ENC}"
   fi
 
-  if ! RESPONSE=$(curl -sSk --fail -H "Authorization: Bearer $TOKEN" "$URL"); then
+  if ! RESPONSE=$(curl --silent --show-error --fail "${CURL_TLS_ARGS[@]}" -H "Authorization: Bearer $TOKEN" "$URL"); then
     echo "ERROR fetch-tekton-records.sh: Tekton Results API request failed on page ${PAGE_COUNT}" >&2
     # Records already emitted to stdout may be re-fetched on the next run
     # because write_cursor is intentionally skipped; Segment dedups via messageId.

@@ -20,6 +20,13 @@
 #     -e SEGMENT_WRITE_KEY=your-write-key \
 #     segment-bridge
 #
+# Tekton Results TLS (optional):
+#   TEKTON_RESULTS_CA_PATH — PEM CA bundle for Results HTTPS only; empty uses image trust store.
+#     Mount a custom CA and set the path, e.g.:
+#     -v /path/to/results-ca.pem:/etc/ssl/certs/results-ca.pem:ro \
+#     -e TEKTON_RESULTS_CA_PATH=/etc/ssl/certs/results-ca.pem
+#   TEKTON_RESULTS_INSECURE — default false; true disables Results cert verification (warning logged).
+#
 
 # First stage: Extract OpenShift client (oc + kubectl) from prefetched tarball.
 # Konflux mounts the Hermeto prefetch output at /cachi2; the tarball is not in the
@@ -76,6 +83,8 @@ COPY --chown=root:root --chmod=644 LICENSE /licenses/LICENSE
 ENV TEKTON_RESULTS_API_ADDR="https://localhost:8443"
 ENV TEKTON_NAMESPACE=""
 ENV TEKTON_LIMIT="100"
+# TEKTON_RESULTS_CA_PATH — optional PEM CA for Results HTTPS; empty uses image trust store.
+# TEKTON_RESULTS_INSECURE — default false; true skips Results TLS verify (emergency only).
 
 # CLUSTER_ID is not set in the image: get-konflux-public-info.sh reads kube-system's
 # metadata.uid when CLUSTER_ID is unset, then exports it for the pipeline. Set

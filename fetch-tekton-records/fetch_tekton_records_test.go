@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -47,6 +48,45 @@ func startMockResultsAPIWithCapture(t *testing.T, fixtureFile string) (*httptest
 	}))
 	t.Cleanup(server.Close)
 	return server, &captured
+}
+
+// startTLSMockResultsAPIWithCapture starts an HTTPS server that serves the given
+// fixture and captures the last request via a pointer-to-pointer so the caller
+// sees the value set by the handler goroutine.
+func startTLSMockResultsAPIWithCapture(t *testing.T, fixtureFile string) (*httptest.Server, **http.Request) {
+	t.Helper()
+	absFixture, err := filepath.Abs(fixtureFile)
+	require.NoError(t, err)
+
+	var mu sync.Mutex
+	var captured *http.Request
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		captured = r
+		mu.Unlock()
+		data, readErr := os.ReadFile(absFixture)
+		if readErr != nil {
+			http.Error(w, readErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(data)
+	}))
+	t.Cleanup(server.Close)
+	return server, &captured
+}
+
+// writeTLSServerCA writes the TLS server's certificate to a temporary file
+// and returns the path for use as TEKTON_RESULTS_CA_PATH.
+func writeTLSServerCA(t *testing.T, server *httptest.Server) string {
+	t.Helper()
+	cert := server.Certificate()
+	require.NotNil(t, cert)
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	require.NotEmpty(t, caPEM)
+	caPath := filepath.Join(t.TempDir(), "results-ca.crt")
+	require.NoError(t, os.WriteFile(caPath, caPEM, 0o600))
+	return caPath
 }
 
 // paginatedHandler routes requests to different fixture files based on the
@@ -267,38 +307,100 @@ func TestFetchTektonRecordsNoToken(t *testing.T) {
 
 // TestFetchTektonRecordsSchemePrepend verifies that a bare host:port address
 // (no scheme) gets https:// prepended automatically by the script, and that
-// the resulting request successfully reaches an HTTPS server.
+// the resulting request successfully reaches an HTTPS server with proper TLS
+// verification.
 func TestFetchTektonRecordsSchemePrepend(t *testing.T) {
-	absFixture, err := filepath.Abs("testdata/records-pipelineruns.json")
-	require.NoError(t, err)
-
-	var mu sync.Mutex
-	var captured *http.Request
-	tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		captured = r
-		mu.Unlock()
-		data, err := os.ReadFile(absFixture)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
-	}))
-	t.Cleanup(tlsServer.Close)
+	server, captured := startTLSMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
 
 	// Strip the https:// scheme so the script must prepend it back.
-	bareAddr := strings.TrimPrefix(tlsServer.URL, "https://")
+	bareAddr := strings.TrimPrefix(server.URL, "https://")
 
-	_, err = runFetchTekton(t, map[string]string{
+	_, err := runFetchTekton(t, map[string]string{
 		"TEKTON_RESULTS_TOKEN":    "test-token",
 		"TEKTON_RESULTS_API_ADDR": bareAddr,
+		"TEKTON_RESULTS_CA_PATH":  writeTLSServerCA(t, server),
+		"KUBECTL":                 "",
 	})
 	require.NoError(t, err)
 
-	require.NotNil(t, captured, "expected the script to prepend https:// and reach the mock server")
-	assert.Contains(t, captured.URL.Path, "/apis/results.tekton.dev/")
+	require.NotNil(t, *captured, "expected the script to prepend https:// and reach the mock server")
+	assert.Contains(t, (*captured).URL.Path, "/apis/results.tekton.dev/")
+}
+
+// TestFetchTektonRecordsRejectsUntrustedTLS verifies that the script fails
+// closed when connecting to an HTTPS server with an untrusted certificate.
+func TestFetchTektonRecordsRejectsUntrustedTLS(t *testing.T) {
+	server, captured := startTLSMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
+
+	_, stderr, err := runFetchTektonWithStderr(t, baseEnv(server.URL))
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "Tekton Results API request failed")
+	assert.Nil(t, *captured, "an untrusted TLS peer must be rejected before HTTP data is sent")
+}
+
+// TestFetchTektonRecordsUsesConfiguredCA verifies that the script succeeds
+// when TEKTON_RESULTS_CA_PATH points to a valid CA that signed the server cert.
+func TestFetchTektonRecordsUsesConfiguredCA(t *testing.T) {
+	server, captured := startTLSMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
+	env := baseEnv(server.URL)
+	env["TEKTON_RESULTS_CA_PATH"] = writeTLSServerCA(t, server)
+
+	out, err := runFetchTekton(t, env)
+	require.NoError(t, err)
+	assert.Len(t, nonEmptyLines(out), 2)
+	require.NotNil(t, *captured)
+	assert.Equal(t, "Bearer test-token", (*captured).Header.Get("Authorization"))
+}
+
+// TestFetchTektonRecordsRejectsHostnameMismatch verifies that the script fails
+// when the certificate is trusted but was issued for a different hostname.
+func TestFetchTektonRecordsRejectsHostnameMismatch(t *testing.T) {
+	server, captured := startTLSMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
+	env := baseEnv(strings.Replace(server.URL, "127.0.0.1", "localhost", 1))
+	env["TEKTON_RESULTS_CA_PATH"] = writeTLSServerCA(t, server)
+
+	_, stderr, err := runFetchTektonWithStderr(t, env)
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "Tekton Results API request failed")
+	assert.Nil(t, *captured, "a trusted certificate for the wrong hostname must be rejected")
+}
+
+// TestFetchTektonRecordsAllowsExplicitInsecureMode verifies that setting
+// TEKTON_RESULTS_INSECURE=true bypasses certificate verification with a warning.
+func TestFetchTektonRecordsAllowsExplicitInsecureMode(t *testing.T) {
+	server, captured := startTLSMockResultsAPIWithCapture(t, "testdata/records-pipelineruns.json")
+	env := baseEnv(server.URL)
+	env["TEKTON_RESULTS_INSECURE"] = "true"
+
+	out, stderr, err := runFetchTektonWithStderr(t, env)
+	require.NoError(t, err)
+	assert.Len(t, nonEmptyLines(out), 2)
+	assert.Contains(t, string(stderr), "WARNING: TEKTON_RESULTS_INSECURE=true disables TLS certificate verification")
+	require.NotNil(t, *captured)
+}
+
+// TestFetchTektonRecordsRejectsInvalidInsecureValue verifies that only "true"
+// or "false" are accepted for TEKTON_RESULTS_INSECURE.
+func TestFetchTektonRecordsRejectsInvalidInsecureValue(t *testing.T) {
+	_, stderr, err := runFetchTektonWithStderr(t, map[string]string{
+		"TEKTON_RESULTS_TOKEN":    "test-token",
+		"TEKTON_RESULTS_API_ADDR": "https://127.0.0.1:1",
+		"TEKTON_RESULTS_INSECURE": "yes",
+	})
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "TEKTON_RESULTS_INSECURE must be 'true' or 'false'")
+}
+
+// TestFetchTektonRecordsRejectsUnreadableCAFile verifies that a missing or
+// unreadable CA file causes the script to exit with a clear error.
+func TestFetchTektonRecordsRejectsUnreadableCAFile(t *testing.T) {
+	_, stderr, err := runFetchTektonWithStderr(t, map[string]string{
+		"TEKTON_RESULTS_TOKEN":    "test-token",
+		"TEKTON_RESULTS_API_ADDR": "https://127.0.0.1:1",
+		"TEKTON_RESULTS_CA_PATH":  filepath.Join(t.TempDir(), "missing-ca.crt"),
+	})
+	require.Error(t, err)
+	assert.Contains(t, string(stderr), "TEKTON_RESULTS_CA_PATH is not a readable file")
 }
 
 func TestFetchTektonRecordsPagination(t *testing.T) {

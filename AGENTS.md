@@ -140,6 +140,8 @@ Default branch is `main`; open PRs against `main`.
 | `TEKTON_RESULTS_API_ADDR` | `https://localhost:8443` | `fetch-tekton-records.sh` |
 | `TEKTON_NAMESPACE` | `-` (all) | `fetch-tekton-records.sh` |
 | `TEKTON_RESULTS_TOKEN` | SA token file | `fetch-tekton-records.sh` |
+| `TEKTON_RESULTS_CA_PATH` | *(empty)* | `fetch-tekton-records.sh` — optional PEM CA for Results HTTPS only; empty uses image trust store |
+| `TEKTON_RESULTS_INSECURE` | `false` | `fetch-tekton-records.sh` — `true` skips Results TLS verify (logs warning; emergency only) |
 | `SEGMENT_BATCH_API` | `https://api.segment.io/v1/batch` | `segment-uploader.sh` |
 | `CURL_NETRC` | `$HOME/.netrc` | `segment-uploader.sh` |
 | `SEGMENT_WRITE_KEY` | *(none)* | `tekton-main-job.sh` — generates `.netrc` |

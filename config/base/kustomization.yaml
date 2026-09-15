@@ -7,3 +7,4 @@ resources:
   - rbac.yaml
   - cursor-rbac.yaml
   - cronjob.yaml
+  - tekton-results-service-ca.yaml

@@ -137,6 +137,13 @@ See the [`Dockerfile`](Dockerfile) header for additional usage examples.
 | `SEGMENT_RETRIES` | `3` | `segment-uploader.sh` | Number of upload retries on failure |
 | `SEGMENT_BATCH_DATA_SIZE` | `501760` (490 KiB) | `segment-mass-uploader.sh` | Maximum bytes per upload batch |
 | `HEARTBEAT_TIMESTAMP` | current UTC time | `tekton-to-segment.sh` | RFC3339 timestamp for the heartbeat event |
+| `FETCH_PIPELINERUNS` | `true` | `tekton-main-job.sh` | Set to `false` to skip PipelineRun fetch |
+| `FETCH_OPERATOR` | `true` | `tekton-main-job.sh` | Set to `false` to skip operator CR fetch |
+| `FETCH_NAMESPACES` | `true` | `tekton-main-job.sh` | Set to `false` to skip namespace fetch |
+| `FETCH_COMPONENTS` | `true` | `tekton-main-job.sh` | Set to `false` to skip component fetch |
+| `FETCH_APPLICATIONS` | `true` | `tekton-main-job.sh` | Set to `false` to skip application fetch |
+| `FETCH_RELEASES` | `true` | `tekton-main-job.sh` | Set to `false` to skip release fetch |
+| `EMIT_HEARTBEAT` | `true` | `tekton-to-segment.sh` | Set to `false` to skip the Segment Bridge Heartbeat |
 
 Integration test variables (`SEGMENT_BRIDGE_TEST_IMAGE`,
 `SEGMENT_BRIDGE_TEST_CONTAINER_RUNTIME`) are documented in
@@ -150,7 +157,9 @@ in script headers for `fetch-namespace-records.sh`, `fetch-component-records.sh`
 - Kubernetes manifests: [`config/`](config/) (Kustomize base)
 - The CronJob runs the published image entrypoint automatically
 - Requires a `segment-bridge-config` Secret with `SEGMENT_WRITE_KEY`
-  (Secret is `optional: true` — pod starts without it, but uploads are skipped)
+  (Secret is `optional: true` — pod starts without it, but uploads are skipped).
+  Optional per-source toggles (`FETCH_*`, `EMIT_HEARTBEAT`) live in the same
+  Secret; only the literal value `false` (case-insensitive) disables a source.
 - Segment [deduplicates events][ES1] via `messageId`, so resending is safe
 - The uploader splits into ~500 KB [batch calls][ES3] and retries failures
 
@@ -164,6 +173,14 @@ metadata:
   namespace: segment-bridge
 stringData:
   SEGMENT_WRITE_KEY: "<your-segment-write-key>"
+  # Optional. Only the literal value "false" (any case) disables a source.
+  # FETCH_PIPELINERUNS: "true"
+  # FETCH_OPERATOR: "true"
+  # FETCH_NAMESPACES: "true"
+  # FETCH_COMPONENTS: "true"
+  # FETCH_APPLICATIONS: "true"
+  # FETCH_RELEASES: "true"
+  # EMIT_HEARTBEAT: "true"
 ```
 
 [1]: https://app.segment.com

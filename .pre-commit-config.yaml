@@ -6,6 +6,9 @@ repos:
     rev: v1.38.0
   - hooks:
       - id: shellcheck
+        # -x follows `# shellcheck source=` so sourced scripts/lib/toggle.sh
+        # is linted with its callers (SC1091). SCRIPTDIR in source= paths.
+        args: ["-x"]
     repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.9.0.6
   - hooks:

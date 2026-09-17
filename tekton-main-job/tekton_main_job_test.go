@@ -120,62 +120,82 @@ func runMainJob(t *testing.T, scriptPath string) (stdout, stderr string, exitCod
 }
 
 func TestBestEffortFetchSources(t *testing.T) {
-	dir := t.TempDir()
+	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
+		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
+		dir := t.TempDir()
 
-	// -- Fetch stubs --
-	// fetch-tekton-records.sh: FAILS (exit 1), stderr only
-	testfixture.WriteStub(t, dir, "fetch-tekton-records.sh",
-		"#!/bin/bash\necho 'ERROR: simulated tekton-results failure' >&2\nexit 1\n")
+		// -- Setup and fetch stubs --
+		testfixture.WriteStub(t, dir, "mktemp", `#!/bin/bash
+if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
+  echo "SEGMENT_WRITE_KEY inherited by mktemp" >&2
+  exit 1
+fi
+exec /usr/bin/mktemp "$@"
+`)
 
-	// fetch-konflux-op-records.sh: succeeds, outputs marker
-	testfixture.WriteStub(t, dir, "fetch-konflux-op-records.sh",
-		"#!/bin/bash\necho '{\"marker\":\"op\"}'\n")
+		// -- Fetch stubs --
+		// fetch-tekton-records.sh: FAILS (exit 1), stderr only
+		testfixture.WriteStub(t, dir, "fetch-tekton-records.sh",
+			"#!/bin/bash\necho 'ERROR: simulated tekton-results failure' >&2\nexit 1\n")
 
-	// fetch-namespace-records.sh: succeeds, outputs marker
-	testfixture.WriteStub(t, dir, "fetch-namespace-records.sh",
-		"#!/bin/bash\necho '{\"marker\":\"ns\"}'\n")
+		// fetch-konflux-op-records.sh: succeeds, outputs marker
+		testfixture.WriteStub(t, dir, "fetch-konflux-op-records.sh",
+			"#!/bin/bash\necho '{\"marker\":\"op\"}'\n")
 
-	// fetch-component-records.sh: succeeds, outputs marker
-	testfixture.WriteStub(t, dir, "fetch-component-records.sh",
-		"#!/bin/bash\necho '{\"marker\":\"comp\"}'\n")
+		// fetch-namespace-records.sh: succeeds, outputs marker
+		testfixture.WriteStub(t, dir, "fetch-namespace-records.sh",
+			"#!/bin/bash\necho '{\"marker\":\"ns\"}'\n")
 
-	// fetch-application-records.sh: succeeds, outputs marker
-	testfixture.WriteStub(t, dir, "fetch-application-records.sh",
-		"#!/bin/bash\necho '{\"marker\":\"app\"}'\n")
+		// fetch-component-records.sh: succeeds, outputs marker
+		testfixture.WriteStub(t, dir, "fetch-component-records.sh",
+			"#!/bin/bash\necho '{\"marker\":\"comp\"}'\n")
 
-	// fetch-release-records.sh: succeeds, outputs marker
-	testfixture.WriteStub(t, dir, "fetch-release-records.sh",
-		"#!/bin/bash\necho '{\"marker\":\"rel\"}'\n")
+		// fetch-application-records.sh: succeeds, outputs marker
+		testfixture.WriteStub(t, dir, "fetch-application-records.sh",
+			"#!/bin/bash\necho '{\"marker\":\"app\"}'\n")
 
-	// -- Downstream stubs (passthrough) --
-	testfixture.WriteStub(t, dir, "get-konflux-public-info.sh",
-		"#!/bin/bash\nexec \"$@\"\n")
+		// fetch-release-records.sh: succeeds, outputs marker
+		testfixture.WriteStub(t, dir, "fetch-release-records.sh",
+			"#!/bin/bash\necho '{\"marker\":\"rel\"}'\n")
 
-	testfixture.WriteStub(t, dir, "tekton-to-segment.sh",
-		"#!/bin/bash\ncat\n")
+		// -- Downstream stubs (passthrough) --
+		testfixture.WriteStub(t, dir, "get-konflux-public-info.sh",
+			"#!/bin/bash\nexec \"$@\"\n")
 
-	testfixture.WriteStub(t, dir, "segment-mass-uploader.sh",
-		"#!/bin/bash\ncat\n")
+		testfixture.WriteStub(t, dir, "tekton-to-segment.sh",
+			"#!/bin/bash\ncat\n")
 
-	script := linkMainJob(t, dir)
-	stdout, stderr, exitCode := runMainJob(t, script)
+		testfixture.WriteStub(t, dir, "segment-mass-uploader.sh",
+			`#!/bin/bash
+if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
+  echo "SEGMENT_WRITE_KEY inherited by uploader" >&2
+  exit 1
+fi
+cat
+`)
 
-	assert.Equal(t, 0, exitCode,
-		"main job should exit 0 even when a fetch source fails; stderr:\n%s", stderr)
+		script := linkMainJob(t, dir)
+		stdout, stderr, exitCode := runMainJob(t, script)
 
-	assert.Contains(t, stdout, `{"marker":"op"}`,
-		"output should contain events from fetch-konflux-op-records (succeeded)")
-	assert.Contains(t, stdout, `{"marker":"ns"}`,
-		"output should contain events from fetch-namespace-records (succeeded)")
-	assert.Contains(t, stdout, `{"marker":"comp"}`,
-		"output should contain events from fetch-component-records (succeeded)")
-	assert.Contains(t, stdout, `{"marker":"app"}`,
-		"output should contain events from fetch-application-records (succeeded)")
-	assert.Contains(t, stdout, `{"marker":"rel"}`,
-		"output should contain events from fetch-release-records (succeeded)")
+		assert.Equal(t, 0, exitCode,
+			"main job should exit 0 even when a fetch source fails; stderr:\n%s", stderr)
 
-	assert.Contains(t, stderr, "simulated tekton-results failure",
-		"stderr should show the failing fetch's error message")
+		assert.Contains(t, stdout, `{"marker":"op"}`,
+			"output should contain events from fetch-konflux-op-records (succeeded)")
+		assert.Contains(t, stdout, `{"marker":"ns"}`,
+			"output should contain events from fetch-namespace-records (succeeded)")
+		assert.Contains(t, stdout, `{"marker":"comp"}`,
+			"output should contain events from fetch-component-records (succeeded)")
+		assert.Contains(t, stdout, `{"marker":"app"}`,
+			"output should contain events from fetch-application-records (succeeded)")
+		assert.Contains(t, stdout, `{"marker":"rel"}`,
+			"output should contain events from fetch-release-records (succeeded)")
+
+		assert.Contains(t, stderr, "simulated tekton-results failure",
+			"stderr should show the failing fetch's error message")
+		assert.NotContains(t, stderr, "test-key",
+			"Segment write key should not appear in stderr")
+	})
 }
 
 func TestLastFetchFails(t *testing.T) {

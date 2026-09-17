@@ -8,12 +8,12 @@
       "description": "Base fields required on every Segment event sent from Konflux UI",
       "properties": {
         "sessionId": { "type": "string", "format": "uuid", "description": "Random UUID generated in memory for the current browser tab; regenerated for each tab" },
-        "clusterVersion": { "type": "string", "description": "Version of the OpenShift/Kubernetes cluster" },
+        "clusterVersion": { "type": "string", "minLength": 1, "description": "Version of the OpenShift/Kubernetes cluster" },
         "konfluxVersion": { "type": "string", "description": "Version of the Konflux instance" },
         "kubernetesVersion": { "type": "string", "description": "Version of the Kubernetes cluster" },
         "openshiftVersion": { "type": "string", "description": "Version of the OpenShift cluster" }
       },
-      "required": ["sessionId", "clusterVersion", "konfluxVersion", "kubernetesVersion"]
+      "required": ["sessionId", "konfluxVersion", "kubernetesVersion"]
     },
     "user_login_event": {
       "x-event-name": "user_login",

@@ -1,5 +1,6 @@
 # This file is managed by fullsend. Do not edit it directly.
-# Upstream: https://github.com/fullsend-ai/fullsend/blob/main/internal/scaffold/fullsend-repo/.github/workflows/prioritize.yml
+# Upstream: https://github.com/fullsend-ai/fullsend/blob/main/internal/
+# scaffold/fullsend-repo/.github/workflows/prioritize.yml
 ---
 # fullsend-stage: prioritize
 name: Prioritize
@@ -33,7 +34,8 @@ concurrency:
 
 jobs:
   prioritize:
-    uses: fullsend-ai/fullsend/.github/workflows/reusable-prioritize.yml@main
+    # v0.43.0
+    uses: fullsend-ai/fullsend/.github/workflows/reusable-prioritize.yml@d5f36921ac754705619f38c637ef692873809fbc
     with:
       event_type: ${{ inputs.event_type }}
       source_repo: ${{ inputs.source_repo }}

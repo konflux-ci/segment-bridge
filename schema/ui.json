@@ -71,7 +71,7 @@
     },
     "user_journey_event": {
       "x-event-name": "user_journey",
-      "description": "Fired once per session, or once per part when the payload is auto-split, capturing the navigation path and per-page dwell times",
+      "description": "Fired as a cumulative checkpoint; may fire multiple times per session, capturing the navigation path and per-page dwell times",
       "allOf": [
         { "$ref": "#/$defs/CommonFields" },
         {
@@ -93,14 +93,10 @@
               "description": "Ordered list of steps (page visits) taken during the session",
               "items": { "$ref": "#/$defs/JourneyStep" }
             },
-            "journeyId": { "type": "string", "description": "Stable identifier linking all parts of a split journey. Only present when auto-split fires (payload exceeded size threshold)." },
-            "journeyPartIndex": { "type": "integer", "minimum": 0, "description": "Zero-based index of this part within a split journey. Only present when auto-split fires." }
+            "journeyId": { "type": "string", "description": "Stable identifier linking all checkpoints and split parts of a journey" },
+            "journeyPartIndex": { "type": "integer", "minimum": 0, "default": 0, "description": "Zero-based index of this part within a split journey, or 0 when the journey is not split" }
           },
-          "dependencies": {
-            "journeyId": ["journeyPartIndex"],
-            "journeyPartIndex": ["journeyId"]
-          },
-          "required": ["userId", "sessionStartedAt", "totalDurationMs", "steps"]
+          "required": ["userId", "sessionStartedAt", "totalDurationMs", "steps", "journeyId", "journeyPartIndex"]
         }
       ]
     },

@@ -197,6 +197,27 @@ image](#running-shell-script-tests-inside-the-bridge-image-optional)
 above for setup and commands. CI runs this automatically (see the
 `unit_tests.yaml` workflow).
 
+### Spec-Driven Feature Work
+
+For substantial behavior changes, data-contract changes, new data sources, or
+work spanning multiple pipeline components, use the checked-in GitHub Spec Kit
+core workflow through Codex:
+
+1. `$speckit-specify` records the requested behavior and acceptance criteria.
+2. `$speckit-clarify` resolves important ambiguities when needed.
+3. `$speckit-plan` and `$speckit-tasks` capture the approach and implementation
+   work.
+4. `$speckit-analyze` checks the artifacts before implementation.
+5. `$speckit-implement` executes the tasks, then `$speckit-converge` checks the
+   implementation against the feature artifacts.
+
+Keep the resulting feature artifacts under `specs/` with the related change.
+Use the existing lightweight contribution workflow for routine fixes,
+dependency updates, lint repairs, and documentation-only maintenance. Spec Kit
+adds development guidance and planning files; it adds no dependency to the
+Segment Bridge image or runtime. See `.specify/memory/constitution.md` and
+`AGENTS.md` for scope and repository guidance.
+
 ### Before submitting the PR
 
 1. The repository enforces pre-commit checks. Install dependencies and run hooks

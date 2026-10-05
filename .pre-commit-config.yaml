@@ -9,6 +9,9 @@ repos:
         # -x follows `# shellcheck source=` so sourced scripts/lib/toggle.sh
         # is linted with its callers (SC1091). SCRIPTDIR in source= paths.
         args: ["-x"]
+        # Spec Kit owns these generated scripts; keep them identical to the
+        # pinned upstream release rather than carrying local lint patches.
+        exclude: ^\.specify/scripts/
     repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.9.0.6
   - hooks:
@@ -33,7 +36,9 @@ repos:
       - id: markdownlint
         # Sample/fixture YAML and rendered HTML are excluded via .gitignore;
         # the .markdownlint.json file relaxes line length on tables.
-        exclude: ^(\.agentready/.*|\.cursor/.*)$
+        # Spec Kit owns its generated templates, including prompt examples
+        # whose lines intentionally exceed this repository's line limit.
+        exclude: ^(\.agentready/.*|\.cursor/.*|\.specify/templates/.*)$
     repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.49.1
   - hooks:

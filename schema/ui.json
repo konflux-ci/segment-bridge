@@ -219,6 +219,31 @@
           "required": ["userId"]
         }
       ]
+    },
+    "copy_login_command_clicked_event": {
+      "x-event-name": "copy_login_command_clicked",
+      "description": "Fired when a user clicks 'Copy login command' in the Help (?) menu.",
+      "allOf": [
+        { "$ref": "#/$defs/CommonFields" },
+        {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string",
+              "description": "Unique identifier of the user",
+              "x-pia": true,
+              "x-obfuscation": "sha256",
+              "x-obfuscation-salt": "clusterId",
+              "tsType": "SHA256Hash"
+            },
+            "userMenuOpenedBefore": {
+              "type": "boolean",
+              "description": "True if the user opened the user-name menu on the same page (URL pathname) before clicking. Resets on pathname change and after each click."
+            }
+          },
+          "required": ["userId", "userMenuOpenedBefore"]
+        }
+      ]
     }
   },
   "oneOf": [
@@ -229,6 +254,7 @@
     { "$ref": "#/$defs/feature_flags_changed_event" },
     { "$ref": "#/$defs/user_journey_event" },
     { "$ref": "#/$defs/conforma_violations_link_clicked_event" },
-    { "$ref": "#/$defs/integration_test_rerun_triggered_event" }
+    { "$ref": "#/$defs/integration_test_rerun_triggered_event" },
+    { "$ref": "#/$defs/copy_login_command_clicked_event" }
   ]
 }

@@ -207,6 +207,8 @@ fi
 RECORDS_URL="${API_BASE}/apis/results.tekton.dev/v1alpha2/parents/${TEKTON_NAMESPACE}/results/-/records"
 
 CURSOR=$(read_cursor)
+RESPONSE_FILE=$(mktemp)
+trap 'rm -f "$RESPONSE_FILE"' EXIT
 PAGE_TOKEN=""
 MAX_CREATE_TIME=""
 PAGE_COUNT=0
@@ -230,7 +232,7 @@ while true; do
     URL="${URL}&page_token=${PAGE_TOKEN_ENC}"
   fi
 
-  if ! RESPONSE=$(curl --silent --show-error --fail "${CURL_TLS_ARGS[@]}" --header "Authorization: Bearer $TOKEN" "$URL"); then
+  if ! curl --silent --show-error --fail "${CURL_TLS_ARGS[@]}" --header "Authorization: Bearer $TOKEN" -o "$RESPONSE_FILE" "$URL"; then
     echo "ERROR fetch-tekton-records.sh: Tekton Results API request failed on page ${PAGE_COUNT}" >&2
     # Records already emitted to stdout may be re-fetched on the next run
     # because write_cursor is intentionally skipped; Segment dedups via messageId.
@@ -238,8 +240,7 @@ while true; do
   fi
 
   # Track max createTime for cursor advancement.
-  PAGE_MAX=$(echo "$RESPONSE" \
-    | jq -r '[.records[]?.createTime // empty] | max // empty')
+  PAGE_MAX=$(jq -r '[.records[]?.createTime // empty] | max // empty' "$RESPONSE_FILE")
   if [[ -n "$PAGE_MAX" ]]; then
     if [[ -z "$MAX_CREATE_TIME" ]] || [[ "$PAGE_MAX" > "$MAX_CREATE_TIME" ]]; then
       MAX_CREATE_TIME="$PAGE_MAX"
@@ -247,22 +248,22 @@ while true; do
   fi
 
   # Output PipelineRuns, filtering by cursor when set.
-  if ! echo "$RESPONSE" | jq -c --arg cursor "${CURSOR}" -f "$SELFDIR/jq/filter-pipelineruns.jq"; then
+  if ! jq -c --arg cursor "${CURSOR}" -f "$SELFDIR/jq/filter-pipelineruns.jq" "$RESPONSE_FILE"; then
     echo "ERROR fetch-tekton-records.sh: failed to parse/filter API response on page ${PAGE_COUNT}" >&2
     exit 1
   fi
 
   # When cursor is set, stop once we reach already-processed records.
   if [[ -n "$CURSOR" ]]; then
-    HIT_CURSOR=$(echo "$RESPONSE" | jq --arg cursor "$CURSOR" \
-      'any(.records[]?; .createTime != null and .createTime <= $cursor)')
+    HIT_CURSOR=$(jq --arg cursor "$CURSOR" \
+      'any(.records[]?; .createTime != null and .createTime <= $cursor)' "$RESPONSE_FILE")
     if [[ "$HIT_CURSOR" == "true" ]]; then
       break
     fi
   fi
 
   # Follow pagination via next_page_token.
-  if ! PAGE_TOKEN=$(echo "$RESPONSE" | jq -r '.nextPageToken // empty'); then
+  if ! PAGE_TOKEN=$(jq -r '.nextPageToken // empty' "$RESPONSE_FILE"); then
     echo "ERROR fetch-tekton-records.sh: failed to parse nextPageToken from API response on page ${PAGE_COUNT}" >&2
     exit 1
   fi

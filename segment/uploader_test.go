@@ -193,6 +193,15 @@ func TestUploader(t *testing.T) {
 			reqs := webfixture.TraceRequestsFrom(func(url string, _ *http.Client) {
 				t.Setenv("SEGMENT_BATCH_API", url)
 				t.Setenv("SEGMENT_BATCH_DATA_SIZE", fmt.Sprintf("%d", tt.maxBatchSize))
+				t.Setenv("SEGMENT_RETRIES", "1")
+
+				netrcPath := filepath.Join(t.TempDir(), ".netrc")
+				require.NoError(t, os.WriteFile(
+					netrcPath,
+					[]byte("machine 127.0.0.1 login test password \"\"\n"),
+					0o600,
+				))
+				t.Setenv("CURL_NETRC", netrcPath)
 
 				withScriptStdin(t, script, func(stdin io.WriteCloser) {
 					err := streamAsJsonLines(stdin, tt.data)

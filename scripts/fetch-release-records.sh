@@ -2,8 +2,8 @@
 # fetch-release-records.sh
 #   List AppStudio Releases cluster-wide and output each as one compact JSON
 #   line to STDOUT (NDJSON-style, one record per line). Only releases created
-#   or updated within the last RELEASE_RECENT_HOURS are emitted (default 4
-#   hours). The script reads only from the cluster via kubectl/oc; no stdin.
+#   within the last RELEASE_RECENT_HOURS are emitted (default 4 hours).
+#   The script reads only from the cluster via kubectl/oc; no stdin.
 #
 #   This script is part of the Tekton/Konflux to Segment pipeline:
 #   { ...; fetch-release-records.sh; } |
@@ -11,8 +11,7 @@
 #
 #   Environment:
 #     RELEASE_RECENT_HOURS  Time window in hours (default: 4). Only releases
-#                           whose effective timestamp (creation or last update)
-#                           is within this window are output.
+#                           created within this window are output.
 #     RELEASE_NOW_ISO       Optional. RFC3339 timestamp used as "now" for
 #                           computing the window. Used by tests for
 #                           deterministic filtering. If unset, system time
@@ -74,30 +73,59 @@ else
 fi
 CUTOFF=$(date -u -d "${NOW} - ${RELEASE_RECENT_HOURS} hours" +%Y-%m-%dT%H:%M:%SZ)
 
-KUBE_ERR=$(mktemp)
-trap 'rm -f "$KUBE_ERR"' EXIT
-set +e
-"$KUBECTL" get releases.appstudio.redhat.com -A -o json 2>"$KUBE_ERR" | jq -c --arg cutoff "$CUTOFF" '
-  .items[]? |
-  (([.metadata.creationTimestamp] + [.metadata.managedFields[]?.time // empty] | map(select(. != null)) | max) // .metadata.creationTimestamp) as $eff |
-  select($eff != null and ($eff | fromdateiso8601) >= ($cutoff | fromdateiso8601)) |
-  .
-'
-ret_kubectl=${PIPESTATUS[0]} ret_jq=${PIPESTATUS[1]}
-set -e
-if [[ $ret_kubectl -ne 0 ]]; then
-	err=$(cat "$KUBE_ERR")
-	if is_release_api_missing_error "$err"; then
-		echo "WARNING: AppStudio Release API not registered; skipping release fetch" >&2
-		exit 0
+# Use the raw list API to process one bounded page at a time. kubectl's normal
+# JSON printer assembles all pages before writing, which can exceed the pod's
+# memory limit. Stage the filtered output so a failed list is never partial.
+WORK_DIR=$(mktemp -d)
+trap 'rm -rf "$WORK_DIR"' EXIT
+PAGE_FILE="$WORK_DIR/page.json"
+OUTPUT_FILE="$WORK_DIR/releases.ndjson"
+KUBE_ERR="$WORK_DIR/kubectl.err"
+: > "$OUTPUT_FILE"
+CONTINUE_TOKEN=""
+PAGE_NUMBER=0
+
+while true; do
+	PAGE_NUMBER=$((PAGE_NUMBER + 1))
+	URL='/apis/appstudio.redhat.com/v1alpha1/releases?limit=100'
+	if [[ -n "$CONTINUE_TOKEN" ]]; then
+		ENCODED_TOKEN=$(jq -nr --arg token "$CONTINUE_TOKEN" '$token | @uri')
+		URL+="&continue=${ENCODED_TOKEN}"
 	fi
-	echo "ERROR: $err" >&2
-	exit 1
-fi
-if [[ $ret_jq -ne 0 ]]; then
-	echo "ERROR: jq failed processing release list" >&2
-	exit 1
-fi
-if [[ -s "$KUBE_ERR" ]]; then
-	echo "WARNING: $(cat "$KUBE_ERR")" >&2
-fi
+
+	if ! "$KUBECTL" get --raw "$URL" > "$PAGE_FILE" 2> "$KUBE_ERR"; then
+		err=$(cat "$KUBE_ERR")
+		# A raw request to an unregistered resource returns a generic 404.
+		# On later pages, any error means the snapshot is incomplete.
+		if [[ "$PAGE_NUMBER" -eq 1 ]] && { is_release_api_missing_error "$err" ||
+			grep -qF 'Error from server (NotFound): the server could not find the requested resource' <<< "$err"; }; then
+			echo "WARNING: AppStudio Release API not registered; skipping release fetch" >&2
+			exit 0
+		fi
+		echo "ERROR: $err" >&2
+		exit 1
+	fi
+	if [[ -s "$KUBE_ERR" ]]; then
+		echo "WARNING: $(cat "$KUBE_ERR")" >&2
+	fi
+
+	# Match kubectl get -o json, which removes managedFields by default.
+	# Validate the list before accepting it so malformed pages cannot silently
+	# turn into an apparently complete, empty result.
+	if ! jq -e '(.items | type == "array") and ((.metadata.continue | type) as $t | $t == "string" or $t == "null")' "$PAGE_FILE" > /dev/null ||
+		! jq -c --arg cutoff "$CUTOFF" '
+			.items[]? | del(.metadata.managedFields) |
+			.metadata.creationTimestamp as $created |
+			select($created != null and ($created | fromdateiso8601) >= ($cutoff | fromdateiso8601)) |
+			.
+		' "$PAGE_FILE" >> "$OUTPUT_FILE"; then
+		echo "ERROR: jq failed processing release list" >&2
+		exit 1
+	fi
+	CONTINUE_TOKEN=$(jq -r '.metadata.continue // empty' "$PAGE_FILE")
+	if [[ -z "$CONTINUE_TOKEN" ]]; then
+		break
+	fi
+done
+
+cat "$OUTPUT_FILE"

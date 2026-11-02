@@ -217,6 +217,12 @@ func TestFetchReleaseRecords(t *testing.T) {
 func TestFetchReleaseRecordsExitsZeroWhenReleaseCRDNotInstalled(t *testing.T) {
 	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
 		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
+		client, err := kubernetes.NewForConfig(buildRestConfig(t))
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			_, err := client.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(context.Background())
+			return err == nil
+		}, 30*time.Second, 200*time.Millisecond, "Kwok API must be ready")
 		now := time.Now().UTC().Format(time.RFC3339)
 		merged := append(os.Environ(), "RELEASE_NOW_ISO="+now)
 		out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, merged)

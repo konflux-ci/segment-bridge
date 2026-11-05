@@ -18,6 +18,8 @@ spec:
                 # To override TEKTON_RESULTS_CA_PATH, use an overlay, not the Secret.
                 - name: TEKTON_RESULTS_CA_PATH
                   value: /var/run/segment-bridge/tekton-results-ca/service-ca.crt
+                - name: FETCH_PIPELINERUNS
+                  value: "false"
               envFrom:
                 - secretRef:
                     name: segment-bridge-config

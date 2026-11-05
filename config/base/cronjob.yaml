@@ -20,6 +20,8 @@ spec:
                   value: /var/run/segment-bridge/tekton-results-ca/service-ca.crt
                 - name: FETCH_PIPELINERUNS
                   value: "false"
+                - name: FETCH_RELEASES
+                  value: "false"
               envFrom:
                 - secretRef:
                     name: segment-bridge-config

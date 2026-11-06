@@ -16,7 +16,7 @@ jobs:
   shell-coverage:
     runs-on: ubuntu-latest
     env:
-      KCOV_OUTPUT_DIR: kcov-output
+      KCOV_OUTPUT_DIR: "${{ github.workspace }}/kcov-output"
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -42,14 +42,14 @@ jobs:
       - name: Run Go tests with kcov shell instrumentation
         run: |
           mkdir -p "$KCOV_OUTPUT_DIR"
-          go test -v ./...
+          go test -p 1 -v ./...
       - name: Print per-file shell coverage summary
         if: always()
         run: |
-          XML="kcov-output/kcov-merged/cobertura.xml"
+          XML="$KCOV_OUTPUT_DIR/kcov-merged/cobertura.xml"
           if [[ ! -f "$XML" ]]; then
-            echo "::warning::No cobertura.xml found at $XML"
-            exit 0
+            echo "::error::No cobertura.xml found at $XML"
+            exit 1
           fi
           echo "## Shell script coverage (kcov)"
           python3 -c "

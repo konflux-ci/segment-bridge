@@ -45,7 +45,7 @@
       "customType": "regex",
       "description": "Go version in mise.toml (must match go.mod)",
       "managerFilePatterns": ["mise.toml"],
-      "matchStrings": ["go\\s*=\\s*\"(?<currentValue>[\\d.]+)\""],
+      "matchStrings": ["^go\\s*=\\s*\"(?<currentValue>[\\d.]+)\""],
       "depNameTemplate": "golang",
       "datasourceTemplate": "golang-version"
     }

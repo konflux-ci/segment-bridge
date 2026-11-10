@@ -40,6 +40,14 @@
       "datasourceTemplate": "custom.openshift-mirror-stable-arm64",
       "versioningTemplate": "semver-coerced",
       "autoReplaceStringTemplate": "download_url: \"https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-arm64-rhel9-{{{newValue}}}.tar.gz\"\n    checksum: \"sha256:{{{newDigest}}}\""
+    },
+    {
+      "customType": "regex",
+      "description": "Go version in mise.toml (must match go.mod)",
+      "managerFilePatterns": ["mise.toml"],
+      "matchStrings": ["go\\s*=\\s*\"(?<currentValue>[\\d.]+)\""],
+      "depNameTemplate": "golang",
+      "datasourceTemplate": "golang-version"
     }
   ],
   "packageRules": [
@@ -51,6 +59,12 @@
     },
     {
       "matchManagers": ["gomod"],
+      "groupName": "Go dependencies"
+    },
+    {
+      "description": "Group mise.toml Go version with Go dependencies so both update in the same PR",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["golang"],
       "groupName": "Go dependencies"
     },
     {

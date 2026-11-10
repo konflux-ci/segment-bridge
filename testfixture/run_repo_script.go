@@ -2,6 +2,8 @@ package testfixture
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,7 +11,9 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // Environment variables controlling optional container execution for script tests.
@@ -20,6 +24,7 @@ const (
 	containerBinDir     = "/usr/local/bin"
 	kubeconfigEnvVar    = "KUBECONFIG"
 	envFileMode         = 0o600
+	hostScriptTimeout   = 5 * time.Minute
 )
 
 // Basenames of scripts copied into the segment-bridge image (see Dockerfile).
@@ -147,7 +152,9 @@ func ScriptBundledInBridgeImage(basename string) bool {
 func RunRepoScript(scriptPath string, stdin *os.File, env []string, args ...string) ([]byte, error) {
 	image := strings.TrimSpace(os.Getenv(EnvTestImage))
 	if image == "" {
-		return runOnHost(scriptPath, stdin, env, args)
+		ctx, cancel := context.WithTimeout(context.Background(), hostScriptTimeout)
+		defer cancel()
+		return runOnHost(ctx, scriptPath, stdin, env, args)
 	}
 	return runInContainer(scriptPath, stdin, env, args, image, nil)
 }
@@ -162,37 +169,64 @@ func RunRepoScriptWithStderr(scriptPath string, stdin *os.File, env []string, ar
 		out, runErr := runInContainer(scriptPath, stdin, env, args, image, &stderrBuf)
 		return out, stderrBuf.Bytes(), runErr
 	}
-	return runOnHostWithStderr(scriptPath, stdin, env, args)
+	ctx, cancel := context.WithTimeout(context.Background(), hostScriptTimeout)
+	defer cancel()
+	return runOnHostWithStderr(ctx, scriptPath, stdin, env, args)
 }
 
-func runOnHost(scriptPath string, stdin *os.File, env []string, args []string) ([]byte, error) {
+func hostScriptCommand(ctx context.Context, scriptPath string, stdin *os.File, env []string, args []string) *exec.Cmd {
 	execPath, execArgs := kcovWrap(scriptPath, args)
-	cmd := exec.Command(execPath, execArgs...)
+	cmd := exec.CommandContext(ctx, execPath, execArgs...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
+	cmd.WaitDelay = time.Second
 	if stdin != nil {
 		cmd.Stdin = stdin
 	}
 	cmd.Env = env
+	return cmd
+}
+
+func runOnHost(ctx context.Context, scriptPath string, stdin *os.File, env []string, args []string) ([]byte, error) {
+	cmd := hostScriptCommand(ctx, scriptPath, stdin, env, args)
 	out, err := cmd.Output()
+	stopHostCommandGroup(cmd, err)
+	if err != nil && ctx.Err() != nil {
+		return nil, fmt.Errorf("timed out executing %s: %w", cmd.Path, ctx.Err())
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error executing script: %w", err)
 	}
 	return out, nil
 }
 
-func runOnHostWithStderr(scriptPath string, stdin *os.File, env []string, args []string) ([]byte, []byte, error) {
-	execPath, execArgs := kcovWrap(scriptPath, args)
-	cmd := exec.Command(execPath, execArgs...)
-	if stdin != nil {
-		cmd.Stdin = stdin
-	}
-	cmd.Env = env
+func runOnHostWithStderr(ctx context.Context, scriptPath string, stdin *os.File, env []string, args []string) ([]byte, []byte, error) {
+	cmd := hostScriptCommand(ctx, scriptPath, stdin, env, args)
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
 	out, err := cmd.Output()
+	stopHostCommandGroup(cmd, err)
+	if err != nil && ctx.Err() != nil {
+		return nil, stderrBuf.Bytes(), fmt.Errorf("timed out executing %s: %w", cmd.Path, ctx.Err())
+	}
 	if err != nil {
 		return nil, stderrBuf.Bytes(), fmt.Errorf("error executing script: %w", err)
 	}
 	return out, stderrBuf.Bytes(), nil
+}
+
+// WaitDelay can close a pipe held by a background child after the shell exits.
+// In that case, stop the rest of the process group before returning the error.
+func stopHostCommandGroup(cmd *exec.Cmd, runErr error) {
+	if runErr != nil && cmd.Process != nil {
+		_ = cmd.Cancel()
+	}
 }
 
 // kcovWrap prepends kcov to the command when KCOV_OUTPUT_DIR is set and kcov

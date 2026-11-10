@@ -219,7 +219,20 @@ func TestKonfluxCRNoKubectlNoOc(t *testing.T) {
 	assert.Contains(t, string(stderr), "oc or kubectl required")
 }
 
+func TestKonfluxCRSmallOutput(t *testing.T) {
+	stubDir := t.TempDir()
+	testfixture.WriteKubectlOcStubs(t, stubDir, `#!/bin/bash
+printf '%s\n' '{"apiVersion":"konflux.konflux-ci.dev/v1alpha1","kind":"Konflux","metadata":{"name":"konflux"}}'
+`)
+	out, err := testfixture.RunRepoScript(scriptPath, nil, konfluxStubEnv(t, stubDir))
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"apiVersion":"konflux.konflux-ci.dev/v1alpha1","kind":"Konflux","metadata":{"name":"konflux"}}`, string(out))
+}
+
 func TestFetchKonfluxOpRecords(t *testing.T) {
+	// Kcov deadlocks on the large CR's stdout; the small-output test above
+	// still covers the script's success path under kcov.
+	t.Setenv(testfixture.EnvKcovOutputDir, "")
 	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
 		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
 		applyInputDir(t, "sample/input")

@@ -16,7 +16,7 @@ jobs:
   shell-coverage:
     runs-on: ubuntu-latest
     env:
-      KCOV_OUTPUT_DIR: kcov-output
+      KCOV_OUTPUT_DIR: "${{ github.workspace }}/kcov-output"
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -42,14 +42,48 @@ jobs:
       - name: Run Go tests with kcov shell instrumentation
         run: |
           mkdir -p "$KCOV_OUTPUT_DIR"
-          go test -v ./...
+
+          go test -p 1 -v ./... &
+          test_pid=$!
+          (
+            timer_pid=
+            # This callback is invoked indirectly by trap; ShellCheck cannot see it.
+            # shellcheck disable=SC2329
+            stop_watchdog() {
+              if [[ -n "${timer_pid:-}" ]]; then
+                kill "$timer_pid" 2>/dev/null || true
+                wait "$timer_pid" 2>/dev/null || true
+              fi
+              exit 0
+            }
+            trap stop_watchdog INT TERM
+            sleep 360 &
+            timer_pid=$!
+            wait "$timer_pid" || exit 0
+            if kill -0 "$test_pid" 2>/dev/null; then
+              echo "::group::Process tree after 6 minutes of shell coverage tests"
+              ps -eo pid,ppid,pgid,stat,etime,wchan:32,args --forest
+              echo "::endgroup::"
+            fi
+          ) &
+          watchdog_pid=$!
+
+          if wait "$test_pid"; then
+            test_status=0
+          else
+            test_status=$?
+          fi
+
+          kill -TERM "$watchdog_pid" 2>/dev/null || true
+          wait "$watchdog_pid" 2>/dev/null || true
+          exit "$test_status"
       - name: Print per-file shell coverage summary
         if: always()
         run: |
-          XML="kcov-output/kcov-merged/cobertura.xml"
+          XML="$KCOV_OUTPUT_DIR/kcov-merged/cobertura.xml"
           if [[ ! -f "$XML" ]]; then
-            echo "::warning::No cobertura.xml found at $XML"
-            exit 0
+            echo "::error::No cobertura.xml found at $XML"
+            exit 1
           fi
           echo "## Shell script coverage (kcov)"
           python3 -c "
@@ -79,5 +113,5 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: shell-scripts
-          files: kcov-output/kcov-merged/cobertura.xml
+          files: ${{ env.KCOV_OUTPUT_DIR }}/kcov-merged/cobertura.xml
           fail_ci_if_error: false

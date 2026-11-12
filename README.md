@@ -138,7 +138,7 @@ See the [`Dockerfile`](Dockerfile) header for additional usage examples.
 | `NAMESPACE_RECENT_HOURS` | `4` | `fetch-namespace-records.sh` | Only emit tenant namespaces created or updated within this many hours |
 | `COMPONENT_RECENT_HOURS` | `4` | `fetch-component-records.sh` | Only emit AppStudio Components created or updated within this many hours |
 | `APPLICATION_RECENT_HOURS` | `4` | `fetch-application-records.sh` | Only emit AppStudio Applications created or updated within this many hours |
-| `RELEASE_RECENT_HOURS` | `4` | `fetch-release-records.sh` | Only emit AppStudio Releases created or updated within this many hours |
+| `RELEASE_RECENT_HOURS` | `4` | `fetch-release-records.sh` | Only emit AppStudio Releases created within this many hours |
 | `CLUSTER_ID` | `anonymous` | `get-konflux-public-info.sh`, `tekton-to-segment.sh` | Salt for anonymized hashes; auto-resolved from cluster when unset (see `get-konflux-public-info.sh`) |
 | `KONFLUX_VERSION` | *(auto)* | `tekton-to-segment.sh` | Optional Konflux version property on Segment events |
 | `KUBERNETES_VERSION` | *(auto)* | `tekton-to-segment.sh` | Optional Kubernetes version property on Segment events |

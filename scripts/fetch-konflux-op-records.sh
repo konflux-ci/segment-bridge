@@ -45,4 +45,5 @@ if [[ -z "$OUTPUT" ]]; then
 	exit 1
 fi
 
-echo "$OUTPUT" | jq -c '.'
+COMPACT_OUTPUT="$(jq -c '.' <<<"$OUTPUT")"
+printf '%s\n' "$COMPACT_OUTPUT"

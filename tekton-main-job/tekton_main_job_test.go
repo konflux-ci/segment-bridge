@@ -29,9 +29,12 @@ var telemetryToggleVars = []string{
 	"EMIT_HEARTBEAT",
 }
 
-func environWithoutTelemetryToggles(extra ...string) []string {
-	drop := make(map[string]struct{}, len(telemetryToggleVars))
+func environWithoutTelemetryToggles(additionalDrop []string, extra ...string) []string {
+	drop := make(map[string]struct{}, len(telemetryToggleVars)+len(additionalDrop))
 	for _, k := range telemetryToggleVars {
+		drop[k] = struct{}{}
+	}
+	for _, k := range additionalDrop {
 		drop[k] = struct{}{}
 	}
 	env := os.Environ()
@@ -113,10 +116,167 @@ func runMainJobWithEnv(t *testing.T, scriptPath string, env []string) (stdout, s
 func runMainJob(t *testing.T, scriptPath string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 	env := environWithoutTelemetryToggles(
+		[]string{"SEGMENT_WRITE_KEY", "SEGMENT_BATCH_API"},
 		"SEGMENT_WRITE_KEY=test-key",
 		"SEGMENT_BATCH_API=https://example.com/v1/batch",
 	)
 	return runMainJobWithEnv(t, scriptPath, env)
+}
+
+func TestSourcedStartupHelperCannotReadSegmentWriteKey(t *testing.T) {
+	const (
+		syntheticKey  = "TEST_SEGMENT_SOURCE_PROBE_KEY"
+		probeFileEnv  = "TEST_SEGMENT_SOURCE_PROBE_FILE"
+		toggleFileEnv = "TEST_SEGMENT_TOGGLE_FILE"
+	)
+	scriptDir := t.TempDir()
+	libDir := filepath.Join(scriptDir, "lib")
+	require.NoError(t, os.Mkdir(libDir, 0o755))
+
+	scriptSource, err := filepath.Abs(mainJobScript)
+	require.NoError(t, err)
+	script, err := os.ReadFile(scriptSource)
+	require.NoError(t, err)
+	scriptPath := filepath.Join(scriptDir, "tekton-main-job.sh")
+	require.NoError(t, os.WriteFile(scriptPath, script, 0o755))
+
+	toggleSource, err := filepath.Abs("../scripts/lib/toggle.sh")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(libDir, "toggle.sh"), []byte(`#!/bin/bash
+if [[ -n "${SEGMENT_WRITE_KEY:-}" || -n "${segment_write_key:-}" ]]; then
+  printf present > "$`+probeFileEnv+`"
+else
+  printf absent > "$`+probeFileEnv+`"
+fi
+source "$`+toggleFileEnv+`"
+`), 0o755))
+
+	testfixture.WriteStub(t, scriptDir, "get-konflux-public-info.sh", `#!/bin/bash
+exec "$@"
+`)
+	testfixture.WriteStub(t, scriptDir, "tekton-to-segment.sh", `#!/bin/bash
+cat > /dev/null
+`)
+	testfixture.WriteStub(t, scriptDir, "segment-mass-uploader.sh", `#!/bin/bash
+exit 0
+`)
+
+	env := environWithoutTelemetryToggles(
+		[]string{"PATH", "SEGMENT_WRITE_KEY", "SEGMENT_BATCH_API", probeFileEnv, toggleFileEnv, "SHELLOPTS"},
+		"PATH="+scriptDir+":"+os.Getenv("PATH"),
+		"SEGMENT_WRITE_KEY="+syntheticKey,
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+		probeFileEnv+"="+filepath.Join(scriptDir, "source-probe"),
+		toggleFileEnv+"="+toggleSource,
+		"FETCH_PIPELINERUNS=false",
+		"FETCH_OPERATOR=false",
+		"FETCH_NAMESPACES=false",
+		"FETCH_COMPONENTS=false",
+		"FETCH_APPLICATIONS=false",
+		"FETCH_RELEASES=false",
+		"EMIT_HEARTBEAT=false",
+	)
+	stdout, stderr, exitCode := runMainJobWithEnv(t, scriptPath, env)
+
+	assert.Equal(t, 0, exitCode, "main job should finish; stderr:\n%s", stderr)
+	probe, err := os.ReadFile(filepath.Join(scriptDir, "source-probe"))
+	require.NoError(t, err, "read sourced helper probe")
+	assert.Equal(t, "absent", string(probe), "sourced helper must not see either Segment key variable")
+	assert.NotContains(t, stdout+stderr, syntheticKey)
+}
+
+func TestSegmentWriteKeyNotInheritedByStartupHelpers(t *testing.T) {
+	const (
+		syntheticKey     = "TEST_SEGMENT_PROBE_KEY"
+		probeDirEnv      = "TEST_SEGMENT_PROBE_DIR"
+		expectedNetrcEnv = "TEST_SEGMENT_EXPECTED_NETRC"
+	)
+	probeDir := t.TempDir()
+	binDir := t.TempDir()
+	expectedNetrc := filepath.Join(probeDir, "expected.netrc")
+	require.NoError(t, os.WriteFile(
+		expectedNetrc,
+		[]byte("machine example.com login "+syntheticKey+" password \"\"\n"),
+		0o600,
+	))
+
+	for _, helper := range []struct {
+		name       string
+		executable string
+	}{
+		{name: "dirname", executable: "/usr/bin/dirname"},
+		{name: "readlink", executable: "/usr/bin/readlink"},
+		{name: "mktemp", executable: "/usr/bin/mktemp"},
+	} {
+		testfixture.WriteStub(t, binDir, helper.name, `#!/bin/bash
+if [[ -n "${SEGMENT_WRITE_KEY:-}" || -n "${segment_write_key:-}" ]]; then
+  printf 'present' > "${`+probeDirEnv+`}/`+helper.name+`"
+else
+  printf 'absent' > "${`+probeDirEnv+`}/`+helper.name+`"
+fi
+exec `+helper.executable+` "$@"
+`)
+	}
+
+	testfixture.WriteStub(t, binDir, "get-konflux-public-info.sh", `#!/bin/bash
+exec "$@"
+`)
+	testfixture.WriteStub(t, binDir, "tekton-to-segment.sh", `#!/bin/bash
+cat > /dev/null
+`)
+	testfixture.WriteStub(t, binDir, "segment-mass-uploader.sh", `#!/bin/bash
+if [[ -n "${SEGMENT_WRITE_KEY:-}" || -n "${segment_write_key:-}" ]]; then
+  echo "Segment write key inherited by uploader" >&2
+  exit 1
+fi
+if [[ -z "${CURL_NETRC:-}" || ! -r "$CURL_NETRC" ]]; then
+  echo "CURL_NETRC is not readable" >&2
+  exit 1
+fi
+if ! /usr/bin/cmp -s "$CURL_NETRC" "${`+expectedNetrcEnv+`}"; then
+  echo "CURL_NETRC contents did not match" >&2
+  exit 1
+fi
+case "$(/usr/bin/uname -s)" in
+  Darwin) mode=$(/usr/bin/stat -f '%Lp' "$CURL_NETRC") ;;
+  *) mode=$(/usr/bin/stat -c '%a' "$CURL_NETRC") ;;
+esac
+if [[ "$mode" != 600 ]]; then
+  echo "CURL_NETRC mode was not 0600" >&2
+  exit 1
+fi
+printf 'uploader-ok\n'
+`)
+
+	script := linkMainJob(t, binDir)
+	env := environWithoutTelemetryToggles(
+		[]string{"PATH", "SEGMENT_WRITE_KEY", "SEGMENT_BATCH_API", probeDirEnv, expectedNetrcEnv, "SHELLOPTS"},
+		"PATH="+binDir+":"+os.Getenv("PATH"),
+		probeDirEnv+"="+probeDir,
+		expectedNetrcEnv+"="+expectedNetrc,
+		"SEGMENT_WRITE_KEY="+syntheticKey,
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+		"SHELLOPTS=allexport:xtrace",
+		"FETCH_PIPELINERUNS=false",
+		"FETCH_OPERATOR=false",
+		"FETCH_NAMESPACES=false",
+		"FETCH_COMPONENTS=false",
+		"FETCH_APPLICATIONS=false",
+		"FETCH_RELEASES=false",
+		"EMIT_HEARTBEAT=false",
+	)
+	stdout, stderr, exitCode := runMainJobWithEnv(t, script, env)
+
+	assert.Equal(t, 0, exitCode, "main job should finish; stderr:\n%s", stderr)
+	for _, helper := range []string{"dirname", "readlink", "mktemp"} {
+		probe, err := os.ReadFile(filepath.Join(probeDir, helper))
+		require.NoError(t, err, "read %s environment probe", helper)
+		assert.Equal(t, "absent", string(probe),
+			"%s must not inherit either Segment write key variable", helper)
+	}
+	assert.Contains(t, stdout, "uploader-ok")
+	assert.NotContains(t, stdout+stderr, syntheticKey,
+		"the synthetic write key must not appear in captured output")
 }
 
 func TestBestEffortFetchSources(t *testing.T) {
@@ -315,6 +475,7 @@ func runRealTransformPipeline(t *testing.T, extraEnv ...string) (stdout, stderr 
 	dir := t.TempDir()
 	writeRealTransformPipeline(t, dir)
 	env := environWithoutTelemetryToggles(
+		[]string{"SEGMENT_WRITE_KEY", "SEGMENT_BATCH_API", "HEARTBEAT_TIMESTAMP"},
 		"SEGMENT_WRITE_KEY=test-key",
 		"SEGMENT_BATCH_API=https://example.com/v1/batch",
 		"HEARTBEAT_TIMESTAMP=2026-01-01T00:10:00Z",
@@ -357,10 +518,11 @@ func TestHeartbeatOffThroughMainJob(t *testing.T) {
 	})
 }
 
+const noKeyHostSyntheticKey = "TEST_SEGMENT_HOST_SYNTHETIC_KEY"
+
 func TestNoSegmentWriteKey(t *testing.T) {
-	withKwokCluster(t, func(t *testing.T) {
-		runTestNoSegmentWriteKey(t)
-	})
+	t.Setenv("SEGMENT_WRITE_KEY", noKeyHostSyntheticKey)
+	runTestNoSegmentWriteKey(t)
 }
 
 func runTestNoSegmentWriteKey(t *testing.T) {
@@ -389,8 +551,11 @@ func runTestNoSegmentWriteKey(t *testing.T) {
 
 	script := linkMainJob(t, dir)
 
-	// Omit SEGMENT_WRITE_KEY so the else-branch (cat > /dev/null) is exercised.
-	env := environWithoutTelemetryToggles("SEGMENT_BATCH_API=https://example.com/v1/batch")
+	// Drop any inherited key so the no-key branch is exercised deterministically.
+	env := environWithoutTelemetryToggles(
+		[]string{"SEGMENT_WRITE_KEY", "SEGMENT_BATCH_API"},
+		"SEGMENT_BATCH_API=https://example.com/v1/batch",
+	)
 	stdout, stderr, exitCode := runMainJobWithEnv(t, script, env)
 
 	assert.Equal(t, 0, exitCode,
@@ -399,6 +564,8 @@ func runTestNoSegmentWriteKey(t *testing.T) {
 		"no upload output expected when SEGMENT_WRITE_KEY is absent")
 	assert.Contains(t, stderr, "No SEGMENT_WRITE_KEY configured",
 		"stderr should warn about missing write key")
+	assert.NotContains(t, stdout+stderr, noKeyHostSyntheticKey,
+		"the synthetic host key must not appear in captured output")
 }
 
 func writeMarkerFetchStubs(t *testing.T, dir string) {
@@ -434,6 +601,7 @@ func runMainJobWithToggleEnv(t *testing.T, extraEnv ...string) (stdout, stderr s
 	writePassthroughDownstream(t, dir)
 	script := linkMainJob(t, dir)
 	env := environWithoutTelemetryToggles(
+		[]string{"SEGMENT_WRITE_KEY", "SEGMENT_BATCH_API"},
 		"SEGMENT_WRITE_KEY=test-key",
 		"SEGMENT_BATCH_API=https://example.com/v1/batch",
 	)

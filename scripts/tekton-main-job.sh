@@ -36,7 +36,15 @@
 #     FETCH_RELEASES       - fetch-release-records.sh
 #     EMIT_HEARTBEAT       - logged here; applied by tekton-to-segment.sh
 #
-set -o pipefail -o errexit -o nounset -o xtrace
+set -o pipefail -o errexit -o nounset
+# Disable allexport and inherited xtrace before reading or copying the key.
+set +a
+set +o xtrace
+# LCOV_EXCL_START: clear the exported secret before launching any helpers.
+unset segment_write_key
+segment_write_key="${SEGMENT_WRITE_KEY:-}"
+unset SEGMENT_WRITE_KEY
+# LCOV_EXCL_STOP
 
 # SELFDIR follows $0 so tests can symlink this script into a stub directory
 # and have PATH resolve there. REALDIR follows the real file so sourced
@@ -44,22 +52,17 @@ set -o pipefail -o errexit -o nounset -o xtrace
 SELFDIR="$(dirname "$0")"
 PATH="$SELFDIR:${PATH#"$SELFDIR":}"
 REALDIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-# shellcheck source=SCRIPTDIR/lib/toggle.sh
-source "$REALDIR/lib/toggle.sh"
 
 # Generate a temporary .netrc file from SEGMENT_WRITE_KEY if provided.
 # The segment-uploader.sh script uses CURL_NETRC for authentication, so we
 # convert the write key into .netrc format here.
-set +o xtrace
-if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
-  # LCOV_EXCL_START: copying and clearing the secret must remain untraced.
-  segment_write_key="$SEGMENT_WRITE_KEY"
-  unset SEGMENT_WRITE_KEY
+if [[ -n "$segment_write_key" ]]; then # LCOV_EXCL_LINE: exclude this credential-path condition from coverage.
   TMPNETRC=$(mktemp)
   trap 'rm -f "$TMPNETRC"' EXIT
   # Extract hostname from SEGMENT_BATCH_API for the .netrc machine field
   SEGMENT_HOST=$(echo "${SEGMENT_BATCH_API:-https://api.segment.io/v1/batch}" | sed -E 's|https?://([^/]+).*|\1|')
   # Segment uses HTTP Basic Auth: write key as login, empty password
+  # LCOV_EXCL_START: keep the credential write and clear untraced.
   printf 'machine %s login %s password ""\n' "$SEGMENT_HOST" "$segment_write_key" > "$TMPNETRC"
   unset segment_write_key
   # LCOV_EXCL_STOP
@@ -67,9 +70,13 @@ if [[ -n "${SEGMENT_WRITE_KEY:-}" ]]; then
   export CURL_NETRC="$TMPNETRC"
   segment_sink() { segment-mass-uploader.sh; }
 else
+  unset segment_write_key # LCOV_EXCL_LINE: exclude this credential cleanup from coverage.
   echo "No SEGMENT_WRITE_KEY configured; skipping upload to Segment" >&2
   segment_sink() { cat > /dev/null; }
 fi
+# Source helpers only after the in-process copy of the write key is cleared.
+# shellcheck source=SCRIPTDIR/lib/toggle.sh
+source "$REALDIR/lib/toggle.sh"
 set -o xtrace # LCOV_EXCL_LINE: resumes tracing after the excluded secret block.
 
 # FETCH_PIPELINERUNS (not FETCH_TEKTON) maps to fetch-tekton-records.sh.

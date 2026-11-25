@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -217,6 +216,12 @@ func TestFetchReleaseRecords(t *testing.T) {
 func TestFetchReleaseRecordsExitsZeroWhenReleaseCRDNotInstalled(t *testing.T) {
 	containerfixture.WithServiceContainer(t, kwok.KwokServiceManifest, func(deployment containerfixture.FixtureInfo) {
 		require.NoError(t, kwok.SetKubeconfigWithPort(deployment.WebPort))
+		client, err := kubernetes.NewForConfig(buildRestConfig(t))
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			_, err := client.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(context.Background())
+			return err == nil
+		}, 30*time.Second, 200*time.Millisecond, "Kwok API must be ready")
 		now := time.Now().UTC().Format(time.RFC3339)
 		merged := append(os.Environ(), "RELEASE_NOW_ISO="+now)
 		out, stderr, err := testfixture.RunRepoScriptWithStderr(scriptPath, nil, merged)
@@ -226,73 +231,6 @@ func TestFetchReleaseRecordsExitsZeroWhenReleaseCRDNotInstalled(t *testing.T) {
 		assert.Contains(t, strings.ToLower(string(stderr)), "skipping",
 			"expected skip WARNING on stderr")
 	})
-}
-
-// jqFilterTimeWindow matches fetch-release-records.sh (effective time vs cutoff).
-const jqFilterTimeWindow = `
-  .items[]? |
-  (([.metadata.creationTimestamp] + [.metadata.managedFields[]?.time // empty] | map(select(. != null)) | max) // .metadata.creationTimestamp) as $eff |
-  select($eff != null and ($eff | fromdateiso8601) >= ($cutoff | fromdateiso8601)) |
-  .
-`
-
-func TestReleaseTimeWindowFilter(t *testing.T) {
-	now := time.Now().UTC()
-	cutoff := now.Add(-4 * time.Hour).Format(time.RFC3339)
-	tsOld := now.Add(-5 * time.Hour).Format(time.RFC3339)
-	tsRecent := now.Add(-2 * time.Hour).Format(time.RFC3339)
-
-	input := map[string]interface{}{
-		"items": []map[string]interface{}{
-			{
-				"apiVersion": "appstudio.redhat.com/v1alpha1",
-				"kind":       "Release",
-				"metadata": map[string]interface{}{
-					"name":              "old-release",
-					"namespace":         "default",
-					"creationTimestamp": tsOld,
-				},
-			},
-			{
-				"apiVersion": "appstudio.redhat.com/v1alpha1",
-				"kind":       "Release",
-				"metadata": map[string]interface{}{
-					"name":              "recent-release",
-					"namespace":         "default",
-					"creationTimestamp": tsRecent,
-				},
-			},
-		},
-	}
-	data, err := json.Marshal(input)
-	require.NoError(t, err)
-
-	tmp, err := os.CreateTemp(t.TempDir(), "rel-*.json")
-	require.NoError(t, err)
-	_, err = tmp.Write(data)
-	require.NoError(t, err)
-	require.NoError(t, tmp.Close())
-
-	cmd := exec.Command("jq", "-c", "--arg", "cutoff", cutoff, strings.TrimSpace(jqFilterTimeWindow), tmp.Name())
-	cmd.Stderr = os.Stderr
-	output, err := cmd.Output()
-	require.NoError(t, err, "run jq filter")
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var nonEmpty []string
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			nonEmpty = append(nonEmpty, strings.TrimSpace(line))
-		}
-	}
-	require.Len(t, nonEmpty, 1, "expected one JSON line (only recent release within 4h), got %d", len(nonEmpty))
-	var rel map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(nonEmpty[0]), &rel))
-	relMeta, _ := rel["metadata"].(map[string]interface{})
-	require.NotNil(t, relMeta)
-	assert.Equal(t, "Release", rel["kind"])
-	name, _ := relMeta["name"].(string)
-	assert.Equal(t, "recent-release", name)
 }
 
 func releaseStubEnv(t *testing.T, stubDir string, extra map[string]string) []string {

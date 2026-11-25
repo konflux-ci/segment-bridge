@@ -42,14 +42,24 @@ jobs:
       - name: Run Go tests with kcov shell instrumentation
         run: |
           mkdir -p "$KCOV_OUTPUT_DIR"
-          go test -v ./...
+          go test -timeout 30m -v ./...
+      - name: Merge per-package shell coverage
+        run: |
+          mapfile -d '' -t report_dirs < <(
+            find . -mindepth 2 -type d -name kcov-output -prune -print0
+          )
+          if (( ${#report_dirs[@]} == 0 )); then
+            echo "::error::No kcov package reports found"
+            exit 1
+          fi
+          kcov --merge "$KCOV_OUTPUT_DIR" "${report_dirs[@]}"
       - name: Print per-file shell coverage summary
         if: always()
         run: |
           XML="kcov-output/kcov-merged/cobertura.xml"
           if [[ ! -f "$XML" ]]; then
-            echo "::warning::No cobertura.xml found at $XML"
-            exit 0
+            echo "::error::No cobertura.xml found at $XML"
+            exit 1
           fi
           echo "## Shell script coverage (kcov)"
           python3 -c "

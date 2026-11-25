@@ -44,6 +44,8 @@ func createTempScript(t *testing.T, content string) string {
 
 func TestRunScriptWithInputFile(t *testing.T) {
 	t.Setenv(EnvTestImage, "")
+	// These temporary scripts are not part of the repository's shell coverage.
+	t.Setenv(EnvKcovOutputDir, "")
 
 	t.Run("SuccessfulExecution", func(t *testing.T) {
 		inputFilePath := createTempFile(t, "Hello world")

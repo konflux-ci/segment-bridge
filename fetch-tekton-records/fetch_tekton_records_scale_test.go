@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/redhat-appstudio/segment-bridge.git/testfixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -113,6 +114,9 @@ func startPagingMockResultsAPI(t *testing.T, records []scaleRecord) *httptest.Se
 // It only proves the client side is order- and count-faithful to whatever
 // already-paginated, already-sorted response the server hands back.
 func TestFetchTektonRecordsLargeDatasetPreservesOrderAndLimit(t *testing.T) {
+	// Kcov deadlocks while forwarding this test's large NDJSON output.
+	// Smaller fetch tests still exercise the script under kcov.
+	t.Setenv(testfixture.EnvKcovOutputDir, "")
 	const totalRecords = 260
 	const taskRunEvery = 4 // every 4th record is a TaskRun, interleaved among PipelineRuns
 	const tektonLimit = 100

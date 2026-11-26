@@ -114,6 +114,11 @@ while true; do
 	# Match kubectl get -o json, which removes managedFields by default.
 	# Validate the list before accepting it so malformed pages cannot silently
 	# turn into an apparently complete, empty result.
+	#
+	# Unlike fetch-{namespace,component,application}-records.sh which filter
+	# by effective time (max of creationTimestamp and managedFields[].time),
+	# releases filter by creationTimestamp only because the previous
+	# kubectl-based approach also filtered by creation time — see PR #401.
 	if ! jq -e '(.items | type == "array") and ((.metadata.continue | type) as $t | $t == "string" or $t == "null")' "$PAGE_FILE" > /dev/null ||
 		! jq -c --arg cutoff "$CUTOFF" '
 			.items[]? | del(.metadata.managedFields) |

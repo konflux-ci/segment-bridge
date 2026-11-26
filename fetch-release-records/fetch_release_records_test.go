@@ -110,8 +110,10 @@ func applyReleaseSampleDir(t *testing.T, inputDir string) {
 
 	clientset, err := kubernetes.NewForConfig(config)
 	require.NoError(t, err, "create kubernetes clientset")
-	_, err = clientset.Discovery().RESTClient().Get().AbsPath("/api").DoRaw(ctx)
-	require.NoError(t, err, "cluster API not ready")
+	require.Eventually(t, func() bool {
+		_, err := clientset.Discovery().RESTClient().Get().AbsPath("/readyz").DoRaw(ctx)
+		return err == nil
+	}, 30*time.Second, 200*time.Millisecond, "Kwok API must be ready")
 	dynClient, err := dynamic.NewForConfig(config)
 	require.NoError(t, err, "create dynamic client")
 	disco := memory.NewMemCacheClient(clientset.Discovery())

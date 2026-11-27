@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/lithammer/dedent v1.1.0
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/exp v0.0.0-20260813180055-c1d0aacb2297
+	golang.org/x/exp v0.0.0-20261124000051-d6646c509b6d
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.37.2
 	k8s.io/apimachinery v0.37.2
